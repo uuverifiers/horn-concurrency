@@ -27,7 +27,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package lazabs.horn.concurrency
+package hornconcurrency
 
 import ap.parser._
 import ap.util.Seqs
