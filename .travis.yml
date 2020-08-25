@@ -1,0 +1,20 @@
+language: scala
+scala:
+  - 2.11.12
+
+jdk:
+          - openjdk8
+
+os:
+    - linux
+
+# Undo _JAVA_OPTIONS environment variable
+before_script:
+  - unset _JAVA_OPTIONS
+
+script:
+  - sbt assembly
+  - cd regression-tests
+  - ./runalldirs
+
+
