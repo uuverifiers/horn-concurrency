@@ -160,8 +160,17 @@ object VerificationLoop {
 ////////////////////////////////////////////////////////////////////////////////
 
 class VerificationLoop(system : ParametricEncoder.System,
-                       initialInvariants : Seq[Seq[Int]] = null) {
-
+                       initialInvariants : Seq[Seq[Int]] = null,
+                       printIntermediateClauseSets : Boolean = false,
+                       fileName : String = "",
+                       templateBasedInterpolationPortfolio : Boolean = false,
+                       templateBasedInterpolation : Boolean = true,
+                       templateBasedInterpolationType :
+                           StaticAbstractionBuilder.AbstractionType.Value =
+                         StaticAbstractionBuilder.AbstractionType.RelationalEqs,
+                       templateBasedInterpolationTimeout : Long = 2000,
+                       log : Boolean = false)
+{
   import VerificationLoop._
   import ParametricEncoder._
   import VerificationHints._
@@ -198,8 +207,8 @@ class VerificationLoop(system : ParametricEncoder.System,
 
     ////////////////////////////////////////////////////////////////////////////
 
-    if (GlobalParameters.get.printIntermediateClauseSets) {
-      val basename = GlobalParameters.get.fileName
+    if (printIntermediateClauseSets) {
+      val basename = fileName
       val suffix =
         (for (inv <- invariants) yield (inv mkString "_")) mkString "--"
       val filename = basename + "-" + suffix + ".smt2"
@@ -237,18 +246,18 @@ class VerificationLoop(system : ParametricEncoder.System,
       }
 
     val params =
-      if (GlobalParameters.get.templateBasedInterpolationPortfolio)
+      if (templateBasedInterpolationPortfolio)
         GlobalParameters.get.withAndWOTemplates
       else
         List()
 
     val predAbsResult = ParallelComputation(params) {
-      val interpolator = if (GlobalParameters.get.templateBasedInterpolation)
+      val interpolator = if (templateBasedInterpolation)
                                Console.withErr(Console.out) {
         val builder =
           new StaticAbstractionBuilder(
             simpClauses,
-            GlobalParameters.get.templateBasedInterpolationType)
+            templateBasedInterpolationType)
         val autoAbstractionMap =
           builder.abstractionRecords
         
@@ -270,7 +279,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
         TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(
           abstractionMap,
-          GlobalParameters.get.templateBasedInterpolationTimeout)
+          templateBasedInterpolationTimeout)
       } else {
         DagInterpolator.interpolatingPredicateGenCEXAndOr _
       }
@@ -288,7 +297,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
     predAbsResult match {
       case Right(rawCEX) => {
-        if (GlobalParameters.get.log)
+        if (log)
           println("Not solvable")
 
         val fullCEX = backTranslator translate rawCEX
@@ -583,7 +592,7 @@ class VerificationLoop(system : ParametricEncoder.System,
              }).toList
 
         
-          if (GlobalParameters.get.log) {
+          if (log) {
             println
             prettyPrint(cexTrace)
             println
@@ -606,7 +615,7 @@ class VerificationLoop(system : ParametricEncoder.System,
               }
              }).toSet
 
-          if (GlobalParameters.get.log) {
+          if (log) {
             println
             println("Raw counterexample:")
             (cex map (_._1)).prettyPrint
@@ -663,7 +672,7 @@ class VerificationLoop(system : ParametricEncoder.System,
       }
 
       case Left(rawSol) => {
-        if (GlobalParameters.get.log) {
+        if (log) {
           println("Solution:")
           val solution = backTranslator translate rawSol
           HornWrapper.verifySolution(solution, encoder.allClauses)

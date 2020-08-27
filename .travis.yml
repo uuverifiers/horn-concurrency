@@ -14,7 +14,4 @@ before_script:
 
 script:
   - sbt assembly
-  - cd regression-tests
-  - ./runalldirs
-
-
+  

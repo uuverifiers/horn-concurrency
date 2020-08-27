@@ -23,9 +23,9 @@ lazy val root = (project in file(".")).
 
 //
 settings(
-  scalaSource in Compile := baseDirectory.value / "src",
+  //scalaSource in Compile := baseDirectory.value / "src",
   //
-  //mainClass in Compile := Some("tricera.Main"),
+  //scalaSource in Test := baseDirectory.value / "test/scala",
   //
   scalacOptions in Compile ++=
     List("-feature",
@@ -35,6 +35,7 @@ settings(
                                         case "2.12.8" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
+  libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.1.0"
 )
   //
