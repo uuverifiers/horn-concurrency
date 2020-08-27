@@ -16,6 +16,8 @@ lazy val parserSettings = Seq(
   crossPaths := true
 )
 
+test in assembly := {}
+
 // Project
 
 lazy val root = (project in file(".")).
