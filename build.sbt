@@ -38,6 +38,6 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1.0"
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.4"
 )
   //
