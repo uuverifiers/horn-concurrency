@@ -37,7 +37,7 @@ settings(
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
                                         case "2.11.12" => "-optimise"
-                                        case "2.12.8" => "-opt:_"
+                                        case "2.12.10" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
