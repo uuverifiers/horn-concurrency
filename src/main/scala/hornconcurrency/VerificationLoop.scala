@@ -33,17 +33,13 @@ import ap.parser._
 import ap.util.Seqs
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
-import lazabs.{ParallelComputation, GlobalParameters}
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util,
-                             HornWrapper}
-import lazabs.horn.abstractions.{AbsLattice, StaticAbstractionBuilder,
-                                 LoopDetector, AbstractionRecord,
-                                 VerificationHints}
+import lazabs.{GlobalParameters, ParallelComputation}
+import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
+import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder, VerificationHints}
 import lazabs.horn.bottomup.TemplateInterpolator
-import lazabs.horn.preprocessor.DefaultPreprocessor
+import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
 
-import scala.collection.mutable.{LinkedHashSet, HashSet => MHashSet,
-                                 ArrayBuffer}
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
 
 object VerificationLoop {
 
@@ -169,7 +165,8 @@ class VerificationLoop(system : ParametricEncoder.System,
                            StaticAbstractionBuilder.AbstractionType.Value =
                          StaticAbstractionBuilder.AbstractionType.RelationalEqs,
                        templateBasedInterpolationTimeout : Long = 2000,
-                       log : Boolean = false)
+                       log : Boolean = false,
+                       expectedStatus : String = "unknown")
 {
   import VerificationLoop._
   import ParametricEncoder._
@@ -177,7 +174,7 @@ class VerificationLoop(system : ParametricEncoder.System,
   import HornClauses.{Clause, FALSE}
   import Util._
 
-  val result : Either[Unit, Counterexample] = {
+  val result : Either[Option[HornPreprocessor.Solution], Counterexample] = {
     val processNum = system.processes.size
 
     var invariants : Seq[Seq[Int]] =
@@ -195,7 +192,7 @@ class VerificationLoop(system : ParametricEncoder.System,
         }
       }
 
-    var res : Either[Unit, Counterexample] = null
+    var res : Either[Option[HornPreprocessor.Solution], Counterexample] = null
 
     while (res == null) {
 
@@ -208,15 +205,15 @@ class VerificationLoop(system : ParametricEncoder.System,
     ////////////////////////////////////////////////////////////////////////////
 
     if (printIntermediateClauseSets) {
-      val basename = fileName
-      val suffix =
-        (for (inv <- invariants) yield (inv mkString "_")) mkString "--"
-      val filename = basename + "-" + suffix + ".smt2"
+      //val basename = fileName
+      //val suffix =
+      //  (for (inv <- invariants) yield (inv mkString "_")) mkString "--"
+      //val filename = basename + "-" + suffix + ".smt2"
 
       println
-      println("Writing Horn clauses to " + filename)
+      println("Writing Horn clauses to " + fileName)
 
-      val out = new java.io.FileOutputStream(filename)
+      val out = new java.io.FileOutputStream(fileName)
       Console.withOut(out) {
         val clauseFors =
           for (c <- encoder.allClauses) yield {
@@ -228,7 +225,7 @@ class VerificationLoop(system : ParametricEncoder.System,
         val allPredicates =
           HornClauses allPredicates encoder.allClauses
 
-        SMTLineariser("C_VC", "HORN", "unknown",
+        SMTLineariser("C_VC", "HORN", expectedStatus,
                       List(), allPredicates.toSeq.sortBy(_.name),
                       clauseFors)
       }
@@ -672,7 +669,7 @@ class VerificationLoop(system : ParametricEncoder.System,
       }
 
       case Left(rawSol) => {
-        if (log) {
+        res = Left(if (log) {
           println("Solution:")
           val solution = backTranslator translate rawSol
           HornWrapper.verifySolution(solution, encoder.allClauses)
@@ -680,8 +677,10 @@ class VerificationLoop(system : ParametricEncoder.System,
           for ((p, f) <- solution)
             println("" + p + ": " + f)
           println
+          Some(solution)
         }
-        res = Left(())
+          else None
+          )
       }
     }
 
