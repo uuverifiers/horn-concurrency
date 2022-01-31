@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2020 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2022 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -301,6 +301,20 @@ class VerificationLoop(system : ParametricEncoder.System,
         HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
 
         val cex = encoder pruneBackgroundClauses fullCEX
+
+        // check whether the counterexample is entirely within the
+        // background axioms
+        if (cex.subdagIterator forall {
+              case DagNode((_, clause), _, _) =>
+                encoder.backgroundClauses contains clause
+            }) {
+
+          if (log)
+            println("Background axioms are unsatisfiable")
+
+          res = Right(List())
+
+        } else
 
         // check whether the counterexample is good enough to
         // reconstruct a genuine counterexample to system correctness

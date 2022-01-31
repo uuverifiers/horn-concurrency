@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2020 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2022 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -1155,6 +1155,10 @@ class ParametricEncoder(system : ParametricEncoder.System,
 
   //////////////////////////////////////////////////////////////////////////////
 
+  val backgroundClauses = backgroundAxioms.clauses
+
+  //////////////////////////////////////////////////////////////////////////////
+
 //  println(symmetryTransitions)
   println("Symmetry clauses:                                      " +
           symmetryTransitions.size)
@@ -1216,7 +1220,7 @@ class ParametricEncoder(system : ParametricEncoder.System,
                    (barrierTransitions map (_._1)) ++
                    timeElapseTransitions ++
                    (assertionTransitions map (_._1)) ++
-                   backgroundAxioms.clauses
+                   backgroundClauses
 
   //////////////////////////////////////////////////////////////////////////////
 
