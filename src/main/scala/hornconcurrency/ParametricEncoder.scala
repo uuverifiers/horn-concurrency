@@ -148,7 +148,9 @@ object ParametricEncoder {
                     hints                : VerificationHints =
                                              EmptyVerificationHints,
                     backgroundAxioms     : BackgroundAxioms =
-                                             NoBackgroundAxioms) {
+                                             NoBackgroundAxioms,
+                    otherPredsToKeep     : Seq[IExpression.Predicate] =
+                                             Nil) {
 
     import HornClauses.Clause
     import IExpression._
@@ -374,6 +376,9 @@ object ParametricEncoder {
       // also keep initial states
       for (clauses <- localInitClauses.iterator; c <- clauses.iterator)
         predsToKeep ++= c.predicates
+
+      // lastly keep all other requested preds
+      predsToKeep ++= otherPredsToKeep
 
       def isLocalClause(p : (Clause, Synchronisation)) = p match {
         case (clause@Clause(head@IAtom(_, headArgs),
