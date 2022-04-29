@@ -37,6 +37,7 @@ import lazabs.{GlobalParameters, ParallelComputation}
 import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
 import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder, VerificationHints}
 import lazabs.horn.bottomup.TemplateInterpolator
+import lazabs.horn.bottomup.Util.Dag
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
 
 import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
@@ -64,11 +65,12 @@ object VerificationLoop {
   case class CEXTimeElapse(_newStates : Seq[IAtom],
                            delay : (Int, Int))               extends CEXStep(_newStates)
 
-  type Counterexample = Seq[CEXStep]
+  type Counterexample = (Seq[CEXStep], Dag[(IAtom, HornClauses.Clause)])
 
   //////////////////////////////////////////////////////////////////////////////
 
-  def prettyPrint(cex : Counterexample) : Unit = {
+  def prettyPrint(cexPair : Counterexample) : Unit = {
+    val cex = cexPair._1
     val colWidth = ((for (step <- cex.iterator; a <- step.newStates.iterator)
                      yield (SimpleAPI pp a).size).max + 2) max 10
     val totalWidth = cex.head.newStates.size * colWidth
@@ -312,7 +314,7 @@ class VerificationLoop(system : ParametricEncoder.System,
           if (log)
             println("Background axioms are unsatisfiable")
 
-          res = Right(List())
+          res = Right((Nil, cex))
 
         } else
 
@@ -602,14 +604,14 @@ class VerificationLoop(system : ParametricEncoder.System,
 
              }).toList
 
-        
+          val cexPair = (cexTrace, cex)
+
           if (log) {
             println
-            prettyPrint(cexTrace)
+            prettyPrint(cexPair)
             println
           }
-
-          res = Right(cexTrace)
+          res = Right(cexPair)
 
         } else {
 
