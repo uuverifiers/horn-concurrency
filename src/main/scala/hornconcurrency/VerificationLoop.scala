@@ -227,479 +227,484 @@ class VerificationLoop(system : ParametricEncoder.System,
         val allPredicates =
           HornClauses allPredicates encoder.allClauses
 
-        SMTLineariser("C_VC", "HORN", expectedStatus,
-                      List(), allPredicates.toSeq.sortBy(_.name),
-                      clauseFors)
-      }
-      out.close
-    }
+          SMTLineariser("C_VC", "HORN", expectedStatus,
+            List(), allPredicates.toSeq.sortBy(_.name),
+            clauseFors)
+        }
+        out.close
+        Left(None) // return dummy result
+      } else {
 
-    ////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////
 
-    println
+        println
 
-    val preprocessor = new DefaultPreprocessor
-    val (simpClauses, simpHints, backTranslator) =
-      Console.withErr(Console.out) {
-        preprocessor.process(encoder.allClauses, encoder.globalHints)
-      }
-
-    val params =
-      if (templateBasedInterpolationPortfolio)
-        GlobalParameters.get.withAndWOTemplates
-      else
-        List()
-
-    val predAbsResult = ParallelComputation(params) {
-      val interpolator = if (templateBasedInterpolation)
-                               Console.withErr(Console.out) {
-        val builder =
-          new StaticAbstractionBuilder(
-            simpClauses,
-            templateBasedInterpolationType)
-        val autoAbstractionMap =
-          builder.abstractionRecords
-        
-        val abstractionMap =
-          if (encoder.globalPredicateTemplates.isEmpty) {
-            autoAbstractionMap
-          } else {
-            val loopDetector = builder.loopDetector
-
-            print("Using interpolation templates provided in program: ")
-
-            val hintsAbstractionMap =
-              loopDetector hints2AbstractionRecord simpHints
-
-            println(hintsAbstractionMap.keys.toSeq sortBy (_.name) mkString ", ")
-
-            AbstractionRecord.mergeMaps(autoAbstractionMap, hintsAbstractionMap)
+        val preprocessor = new DefaultPreprocessor
+        val (simpClauses, simpHints, backTranslator) =
+          Console.withErr(Console.out) {
+            preprocessor.process(encoder.allClauses, encoder.globalHints)
           }
 
-        TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(
-          abstractionMap,
-          templateBasedInterpolationTimeout)
-      } else {
-        DagInterpolator.interpolatingPredicateGenCEXAndOr _
-      }
+        val params =
+          if (templateBasedInterpolationPortfolio)
+            GlobalParameters.get.withAndWOTemplates
+          else
+            List()
 
-      println
-      println(
-         "----------------------------------- CEGAR --------------------------------------")
+        val predAbsResult = ParallelComputation(params) {
+          val interpolator = if (templateBasedInterpolation)
+            Console.withErr(Console.out) {
+              val builder =
+                new StaticAbstractionBuilder(
+                  simpClauses,
+                  templateBasedInterpolationType)
+              val autoAbstractionMap =
+                builder.abstractionRecords
 
-      new HornPredAbs(simpClauses,
-                      simpHints.toInitialPredicates,
-                      interpolator).result
-    }
+              val abstractionMap =
+                if (encoder.globalPredicateTemplates.isEmpty) {
+                  autoAbstractionMap
+                } else {
+                  val loopDetector = builder.loopDetector
 
-    ////////////////////////////////////////////////////////////////////////////
+                  print("Using interpolation templates provided in program: ")
 
-    predAbsResult match {
-      case Right(rawCEX) => {
-        if (log)
-          println("Not solvable")
+                  val hintsAbstractionMap =
+                    loopDetector hints2AbstractionRecord simpHints
 
-        val fullCEX = backTranslator translate rawCEX
-        HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
+                  println(hintsAbstractionMap.keys.toSeq sortBy (_.name) mkString ", ")
 
-        val cex = encoder pruneBackgroundClauses fullCEX
+                  AbstractionRecord.mergeMaps(autoAbstractionMap, hintsAbstractionMap)
+                }
 
-        // check whether the counterexample is entirely within the
-        // background axioms
-        if (cex.subdagIterator forall {
+              TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(
+                abstractionMap,
+                templateBasedInterpolationTimeout)
+            } else {
+            DagInterpolator.interpolatingPredicateGenCEXAndOr _
+          }
+
+          println
+          println(
+            "----------------------------------- CEGAR --------------------------------------")
+
+          new HornPredAbs(simpClauses,
+            simpHints.toInitialPredicates,
+            interpolator).result
+        }
+
+        ////////////////////////////////////////////////////////////////////////////
+
+        predAbsResult match {
+          case Right(rawCEX) => {
+            if (log)
+              println("Not solvable")
+
+            val fullCEX = backTranslator translate rawCEX
+            HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
+
+            val cex = encoder pruneBackgroundClauses fullCEX
+
+            // check whether the counterexample is entirely within the
+            // background axioms
+            if (cex.subdagIterator forall {
               case DagNode((_, clause), _, _) =>
                 encoder.backgroundClauses contains clause
             }) {
 
-          if (log)
-            println("Background axioms are unsatisfiable")
+              if (log)
+                println("Background axioms are unsatisfiable")
 
-          res = Right((Nil, cex))
+              res = Right((Nil, cex))
 
-        } else
+            } else
 
-        // check whether the counterexample is good enough to
-        // reconstruct a genuine counterexample to system correctness
-        if (cex.subdagIterator forall {
+            // check whether the counterexample is good enough to
+            // reconstruct a genuine counterexample to system correctness
+            if (cex.subdagIterator forall {
               case DagNode((_, clause), List(1), _) =>
                 (encoder.symmetryTransitions contains clause) ||
-                (encoder.localTransitions exists (_._1 == clause)) ||
-                (encoder.sendReceiveTransitions exists (_._1 == clause)) ||
-                (encoder.timeElapseTransitions contains clause) ||
-                (encoder.assertionTransitions exists (_._1 == clause)) ||
-                (encoder.barrierTransitions exists (_._1 == clause))
+                  (encoder.localTransitions exists (_._1 == clause)) ||
+                  (encoder.sendReceiveTransitions exists (_._1 == clause)) ||
+                  (encoder.timeElapseTransitions contains clause) ||
+                  (encoder.assertionTransitions exists (_._1 == clause)) ||
+                  (encoder.barrierTransitions exists (_._1 == clause))
               case DagNode((_, clause), List(), DagEmpty) =>
                 (encoder.initTransitions exists (_._1 == clause))
               case _ =>
                 false
             }) {
 
-          import system.globalVarNum
+              import system.globalVarNum
 
-          //////////////////////////////////////////////////////////////////////
+              //////////////////////////////////////////////////////////////////////
 
-          var currentStates : Array[IAtom] = null
+              var currentStates: Array[IAtom] = null
 
-          def findModifiedIndexes(newStates : Seq[IAtom]) : (List[Int], List[IAtom]) = {
-            val remaining = new ArrayBuffer[(IAtom, Int)]
-            val unmatched = new ArrayBuffer[IAtom]
-            remaining ++= currentStates.iterator.zipWithIndex
-            for (a@IAtom(p, pArgs) <- newStates) {
-              val i = remaining indexWhere {
-                case (IAtom(q, qArgs), _) =>
-                  p == q && (pArgs drop globalVarNum) == (qArgs drop globalVarNum)
+              def findModifiedIndexes(newStates: Seq[IAtom]): (List[Int], List[IAtom]) = {
+                val remaining = new ArrayBuffer[(IAtom, Int)]
+                val unmatched = new ArrayBuffer[IAtom]
+                remaining ++= currentStates.iterator.zipWithIndex
+                for (a@IAtom(p, pArgs) <- newStates) {
+                  val i = remaining indexWhere {
+                    case (IAtom(q, qArgs), _) =>
+                      p == q && (pArgs drop globalVarNum) == (qArgs drop globalVarNum)
+                  }
+                  if (i >= 0)
+                    remaining remove i
+                  else
+                    unmatched += a
+                }
+                ((remaining.iterator map (_._2)).toList, unmatched.toList)
               }
-              if (i >= 0)
-                remaining remove i
-              else
-                unmatched += a
-            }
-            ((remaining.iterator map (_._2)).toList, unmatched.toList)
-          }
 
-          def updateGlobalVars(newGlobalVars : Seq[ITerm]) : Unit =
-            for (i <- 0 until currentStates.size) {
-              val IAtom(p, args) = currentStates(i)
-              currentStates(i) = IAtom(p, newGlobalVars ++ (args drop globalVarNum))
-            }
-
-          //////////////////////////////////////////////////////////////////////
-
-          import system.ClauseBody
-
-          val cexTrace =
-            (for ((atom@IAtom(globalPred, _), clause) <- cex.iterator.toSeq.reverse;
-                   if (globalPred != HornClauses.FALSE &&
-                       !(encoder.symmetryTransitions contains clause))) yield {
-               val localAtoms = encoder decodeLocalStates atom
-
-               val res =
-               (for ((_, systemClauses) <-
-                      encoder.initTransitions find (_._1 == clause)) yield {
-                  assert((systemClauses.size == localAtoms.size) &&
-                         ((systemClauses.iterator zip localAtoms.iterator) forall {
-                            case (Clause(IAtom(a, _), _, _), IAtom(b, _)) => a == b
-                          }))
-                  currentStates = localAtoms.toArray
-                  CEXInit(localAtoms, systemClauses)
-
-                }) orElse (
-
-                for ((_, systemClause@Clause(IAtom(headP, _), _, _)) <-
-                      encoder.localTransitions find (_._1 == clause)) yield {
-
-                  findModifiedIndexes(localAtoms) match {
-
-                    case (Seq(), Seq()) => {
-
-                      // we need to find out which of the local states are
-                      // modified by which transition (clause)
-    
-                      val preIndex = SimpleAPI.withProver { p =>
-                        import p._
-                        import IExpression._
-    
-                        val pre = createFunction("pre", 2)
-                        val post = createFunction("post", 2)
-                        val preIndex, postIndex = createConstant
-    
-                        for ((IAtom(_, args), i) <-
-                               currentStates.iterator.zipWithIndex;
-                             (v, j) <- args.iterator.zipWithIndex)
-                          !! (pre(i, j) === v)
-                        for ((IAtom(_, args), i) <-
-                               localAtoms.iterator.zipWithIndex;
-                             (v, j) <- args.iterator.zipWithIndex)
-                          !! (post(i, j) === v)
-    
-                        val (Clause(IAtom(headP, headArgs),
-                                    ClauseBody(List(IAtom(bodyP, bodyArgs)), _),
-                                    constraint),
-                             newConsts) = systemClause.refresh
-                        addConstants(newConsts)
-
-                        !! (or(for ((IAtom(`bodyP`, _), j) <-
-                                      currentStates.iterator.zipWithIndex)
-                               yield (preIndex === j)))
-    
-                        !! (or(for ((IAtom(`headP`, _), j) <-
-                                      localAtoms.iterator.zipWithIndex)
-                               yield (postIndex === j)))
-
-                        !! (constraint)
-
-                        for ((e, j) <- bodyArgs.iterator.zipWithIndex)
-                          !! (pre(preIndex, j) === e)
-                        for ((e, j) <- headArgs.iterator.zipWithIndex)
-                          !! (post(postIndex, j) === e)
-    
-                        ???
-                        assert(??? == ProverStatus.Sat)
-    
-                        eval(preIndex)
-                      }
-
-                      updateGlobalVars(localAtoms.head.args take globalVarNum)
-                      CEXLocalStep(currentStates.toList, preIndex.intValueSafe, systemClause)
-                    }
-
-                    case (List(index), List(newState@IAtom(_, newArgs))) => {
-                      currentStates(index) = newState
-                      updateGlobalVars(newArgs take globalVarNum)
-
-                      CEXLocalStep(currentStates.toList, index, systemClause)
-                    }
-                  }
-
-                }) orElse (
-
-                for ((_, (sendClause@Clause(IAtom(newSendP, _),
-                                            ClauseBody(List(IAtom(oldSendP, _)), _), _),
-                          receiveClause@Clause(IAtom(newRecP, _),
-                                               ClauseBody(List(IAtom(oldRecP, _)), _), _),
-                          commChannel)) <-
-                      encoder.sendReceiveTransitions find (_._1 == clause)) yield {
-
-                  // right now we assume exactly two states were
-                  // modified; this is not always the case.
-                  // TODO: generalise
-
-                  val (List(index1, index2),
-                       List(newState1@IAtom(newP1, newArgs1),
-                            newState2@IAtom(newP2, _))) =
-                    findModifiedIndexes(localAtoms)
-
-                  assert(Set(newSendP, newRecP) == Set(newP1, newP2))
-
-                  val (senderIndex, receiverIndex) =
-                    if (oldSendP == currentStates(index1).pred)
-                      (index1, index2)
-                    else
-                      (index2, index1)
-
-                  updateGlobalVars(newArgs1 take globalVarNum)
-
-                  if (newSendP == newP1 &&
-                      (newSendP != newRecP ||
-                       // special case: sender and receiver have the same
-                       // target predicate; in this case check the process id
-                       currentStates(senderIndex).args(globalVarNum) ==
-                         newState1.args(globalVarNum))) {
-                    currentStates(senderIndex) = newState1
-                    currentStates(receiverIndex) = newState2
-                    CEXCommStep(currentStates.toList, commChannel,
-                                senderIndex, sendClause,
-                                receiverIndex, receiveClause)
-                  } else {
-                    currentStates(senderIndex) = newState2
-                    currentStates(receiverIndex) = newState1
-                    CEXCommStep(currentStates.toList, commChannel,
-                                senderIndex, sendClause,
-                                receiverIndex, receiveClause)
-                  }
-
-                }) orElse (
-
-                for ((_, (barrierClauses, barrier)) <-
-                      encoder.barrierTransitions find (_._1 == clause)) yield {
-
-                  // we need to find out which of the local states are
-                  // modified by which transition (clause)
-
-                  val clauseIndexes = SimpleAPI.withProver { p =>
-                    import p._
-                    import IExpression._
-
-                    val pre = createFunction("pre", 2)
-                    val post = createFunction("post", 2)
-                    val preIndex, postIndex = createConstants(barrierClauses.size)
-
-                    for ((IAtom(_, args), i) <-
-                           currentStates.iterator.zipWithIndex;
-                         (v, j) <- args.iterator.zipWithIndex)
-                      !! (pre(i, j) === v)
-                    for ((IAtom(_, args), i) <-
-                           localAtoms.iterator.zipWithIndex;
-                         (v, j) <- args.iterator.zipWithIndex)
-                      !! (post(i, j) === v)
-
-                    for (((c, d), clause@Clause(IAtom(headP, _),
-                                                ClauseBody(List(IAtom(bodyP, _)), _),
-                                                _)) <-
-                           (preIndex.iterator zip postIndex.iterator) zip
-                             barrierClauses.iterator) {
-
-                      !! (or(for ((IAtom(`bodyP`, _), j) <-
-                                    currentStates.iterator.zipWithIndex)
-                             yield (c === j)))
-
-                      !! (or(for ((IAtom(`headP`, _), j) <-
-                                    localAtoms.iterator.zipWithIndex)
-                             yield (d === j)))
-
-                      val (Clause(IAtom(_, headArgs),
-                                  ClauseBody(List(IAtom(_, bodyArgs)), _),
-                                  constraint),
-                           newConsts) = clause.refresh
-                      addConstants(newConsts)
-
-                      !! (constraint)
-                      for ((e, j) <- bodyArgs.iterator.zipWithIndex)
-                        !! (pre(c, j) === e)
-                      for ((e, j) <- headArgs.iterator.zipWithIndex)
-                        !! (post(d, j) === e)
-                    }
-
-                    !! (distinct(preIndex))
-                    !! (distinct(postIndex))
-
-                    ???
-                    assert(??? == ProverStatus.Sat)
-
-                    (for (((c, d), clause) <-
-                            (preIndex.iterator zip postIndex.iterator) zip
-                              barrierClauses.iterator) yield {
-                       val oldIndex = eval(c).intValueSafe
-                       val newIndex = eval(d).intValueSafe
-                       currentStates(oldIndex) = localAtoms(newIndex)
-                       (oldIndex, clause)
-                     }).toList
-                  }
-
-                  CEXBarrierStep(currentStates.toList, barrier, clauseIndexes)
-
-                }) orElse (
-
-                for (_ <-
-                     encoder.timeElapseTransitions find (_ == clause)) yield {
-
-                  val oldGlobal = currentStates(0).args take globalVarNum
-                  val newGlobal = localAtoms.head.args take globalVarNum
-                  val delay = system.timeSpec match {
-                    case NoTime => {
-                      assert(false)
-                      (-1, 1)
-                    }
-                    case DiscreteTime(index) =>
-                      (newGlobal(index).asInstanceOf[IIntLit].value.intValueSafe -
-                       oldGlobal(index).asInstanceOf[IIntLit].value.intValueSafe, 1)
-                    case ContinuousTime(num, denom) =>
-                      (newGlobal(num).asInstanceOf[IIntLit].value.intValueSafe -
-                       oldGlobal(num).asInstanceOf[IIntLit].value.intValueSafe,
-                       oldGlobal(denom).asInstanceOf[IIntLit].value.intValueSafe)
-                  }
-
-                  updateGlobalVars(newGlobal)
-                  CEXTimeElapse(currentStates.toList, delay)
-
-                }) getOrElse {
-
-                  throw new Exception("Could not recognise the clause: " + clause)
-
+              def updateGlobalVars(newGlobalVars: Seq[ITerm]): Unit =
+                for (i <- 0 until currentStates.size) {
+                  val IAtom(p, args) = currentStates(i)
+                  currentStates(i) = IAtom(p, newGlobalVars ++ (args drop globalVarNum))
                 }
 
-               assert(currentStates.toSet == localAtoms.toSet)
+              //////////////////////////////////////////////////////////////////////
 
-               res
+              import system.ClauseBody
 
-             }).toList
+              val cexTrace =
+                (for ((atom@IAtom(globalPred, _), clause) <- cex.iterator.toSeq.reverse;
+                      if (globalPred != HornClauses.FALSE &&
+                        !(encoder.symmetryTransitions contains clause))) yield {
+                  val localAtoms = encoder decodeLocalStates atom
 
-          val cexPair = (cexTrace, cex)
+                  val res =
+                    (for ((_, systemClauses) <-
+                            encoder.initTransitions find (_._1 == clause)) yield {
+                      assert((systemClauses.size == localAtoms.size) &&
+                        ((systemClauses.iterator zip localAtoms.iterator) forall {
+                          case (Clause(IAtom(a, _), _, _), IAtom(b, _)) => a == b
+                        }))
+                      currentStates = localAtoms.toArray
+                      CEXInit(localAtoms, systemClauses)
 
-          if (log) {
-            println
-            prettyPrint(cexPair)
-            println
-          }
-          res = Right(cexPair)
+                    }) orElse (
 
-        } else {
+                      for ((_, systemClause@Clause(IAtom(headP, _), _, _)) <-
+                             encoder.localTransitions find (_._1 == clause)) yield {
 
-          // we have to refine the chosen invariant schema
-          val processes =
-            (for ((atom@IAtom(globalPred, _), _) <- cex.iterator;
-                  if (globalPred != FALSE);
-                  localAtom <- (encoder decodeLocalStates atom).iterator) yield {
-              val IAtom(pred, args) = localAtom
-              val processIndex = system.localPredsSet indexWhere (_ contains pred)
-              system.processes(processIndex) match {
-                case (_, Singleton) => (processIndex, 0)
-                case (_, Infinite)  => (processIndex, args(system.globalVarNum))
+                        findModifiedIndexes(localAtoms) match {
+
+                          case (Seq(), Seq()) => {
+
+                            // we need to find out which of the local states are
+                            // modified by which transition (clause)
+
+                            val preIndex = SimpleAPI.withProver { p =>
+                              import p._
+                              import IExpression._
+
+                              val pre = createFunction("pre", 2)
+                              val post = createFunction("post", 2)
+                              val preIndex, postIndex = createConstant
+
+                              for ((IAtom(_, args), i) <-
+                                     currentStates.iterator.zipWithIndex;
+                                   (v, j) <- args.iterator.zipWithIndex)
+                                !!(pre(i, j) === v)
+                              for ((IAtom(_, args), i) <-
+                                     localAtoms.iterator.zipWithIndex;
+                                   (v, j) <- args.iterator.zipWithIndex)
+                                !!(post(i, j) === v)
+
+                              val (Clause(IAtom(headP, headArgs),
+                              ClauseBody(List(IAtom(bodyP, bodyArgs)), _),
+                              constraint),
+                              newConsts) = systemClause.refresh
+                              addConstants(newConsts)
+
+                              !!(or(for ((IAtom(`bodyP`, _), j) <-
+                                           currentStates.iterator.zipWithIndex)
+                                yield (preIndex === j)))
+
+                              !!(or(for ((IAtom(`headP`, _), j) <-
+                                           localAtoms.iterator.zipWithIndex)
+                                yield (postIndex === j)))
+
+                              !!(constraint)
+
+                              for ((e, j) <- bodyArgs.iterator.zipWithIndex)
+                                !!(pre(preIndex, j) === e)
+                              for ((e, j) <- headArgs.iterator.zipWithIndex)
+                                !!(post(postIndex, j) === e)
+
+                              ???
+                              assert(??? == ProverStatus.Sat)
+
+                              eval(preIndex)
+                            }
+
+                            updateGlobalVars(localAtoms.head.args take globalVarNum)
+                            CEXLocalStep(currentStates.toList, preIndex.intValueSafe, systemClause)
+                          }
+
+                          case (List(index), List(newState@IAtom(_, newArgs))) => {
+                            currentStates(index) = newState
+                            updateGlobalVars(newArgs take globalVarNum)
+
+                            CEXLocalStep(currentStates.toList, index, systemClause)
+                          }
+                        }
+
+                      }) orElse (
+
+                      for ((_, (sendClause@Clause(IAtom(newSendP, _),
+                      ClauseBody(List(IAtom(oldSendP, _)), _), _),
+                      receiveClause@Clause(IAtom(newRecP, _),
+                      ClauseBody(List(IAtom(oldRecP, _)), _), _),
+                      commChannel)) <-
+                             encoder.sendReceiveTransitions find (_._1 == clause)) yield {
+
+                        // right now we assume exactly two states were
+                        // modified; this is not always the case.
+                        // TODO: generalise
+
+                        val (List(index1, index2),
+                        List(newState1@IAtom(newP1, newArgs1),
+                        newState2@IAtom(newP2, _))) =
+                          findModifiedIndexes(localAtoms)
+
+                        assert(Set(newSendP, newRecP) == Set(newP1, newP2))
+
+                        val (senderIndex, receiverIndex) =
+                          if (oldSendP == currentStates(index1).pred)
+                            (index1, index2)
+                          else
+                            (index2, index1)
+
+                        updateGlobalVars(newArgs1 take globalVarNum)
+
+                        if (newSendP == newP1 &&
+                          (newSendP != newRecP ||
+                            // special case: sender and receiver have the same
+                            // target predicate; in this case check the process id
+                            currentStates(senderIndex).args(globalVarNum) ==
+                              newState1.args(globalVarNum))) {
+                          currentStates(senderIndex) = newState1
+                          currentStates(receiverIndex) = newState2
+                          CEXCommStep(currentStates.toList, commChannel,
+                            senderIndex, sendClause,
+                            receiverIndex, receiveClause)
+                        } else {
+                          currentStates(senderIndex) = newState2
+                          currentStates(receiverIndex) = newState1
+                          CEXCommStep(currentStates.toList, commChannel,
+                            senderIndex, sendClause,
+                            receiverIndex, receiveClause)
+                        }
+
+                      }) orElse (
+
+                      for ((_, (barrierClauses, barrier)) <-
+                             encoder.barrierTransitions find (_._1 == clause)) yield {
+
+                        // we need to find out which of the local states are
+                        // modified by which transition (clause)
+
+                        val clauseIndexes = SimpleAPI.withProver { p =>
+                          import p._
+                          import IExpression._
+
+                          val pre = createFunction("pre", 2)
+                          val post = createFunction("post", 2)
+                          val preIndex, postIndex = createConstants(barrierClauses.size)
+
+                          for ((IAtom(_, args), i) <-
+                                 currentStates.iterator.zipWithIndex;
+                               (v, j) <- args.iterator.zipWithIndex)
+                            !!(pre(i, j) === v)
+                          for ((IAtom(_, args), i) <-
+                                 localAtoms.iterator.zipWithIndex;
+                               (v, j) <- args.iterator.zipWithIndex)
+                            !!(post(i, j) === v)
+
+                          for (((c, d), clause@Clause(IAtom(headP, _),
+                          ClauseBody(List(IAtom(bodyP, _)), _),
+                          _)) <-
+                                 (preIndex.iterator zip postIndex.iterator) zip
+                                   barrierClauses.iterator) {
+
+                            !!(or(for ((IAtom(`bodyP`, _), j) <-
+                                         currentStates.iterator.zipWithIndex)
+                              yield (c === j)))
+
+                            !!(or(for ((IAtom(`headP`, _), j) <-
+                                         localAtoms.iterator.zipWithIndex)
+                              yield (d === j)))
+
+                            val (Clause(IAtom(_, headArgs),
+                            ClauseBody(List(IAtom(_, bodyArgs)), _),
+                            constraint),
+                            newConsts) = clause.refresh
+                            addConstants(newConsts)
+
+                            !!(constraint)
+                            for ((e, j) <- bodyArgs.iterator.zipWithIndex)
+                              !!(pre(c, j) === e)
+                            for ((e, j) <- headArgs.iterator.zipWithIndex)
+                              !!(post(d, j) === e)
+                          }
+
+                          !!(distinct(preIndex))
+                          !!(distinct(postIndex))
+
+                          ???
+                          assert(??? == ProverStatus.Sat)
+
+                          (for (((c, d), clause) <-
+                                  (preIndex.iterator zip postIndex.iterator) zip
+                                    barrierClauses.iterator) yield {
+                            val oldIndex = eval(c).intValueSafe
+                            val newIndex = eval(d).intValueSafe
+                            currentStates(oldIndex) = localAtoms(newIndex)
+                            (oldIndex, clause)
+                          }).toList
+                        }
+
+                        CEXBarrierStep(currentStates.toList, barrier, clauseIndexes)
+
+                      }) orElse (
+
+                      for (_ <-
+                             encoder.timeElapseTransitions find (_ == clause)) yield {
+
+                        val oldGlobal = currentStates(0).args take globalVarNum
+                        val newGlobal = localAtoms.head.args take globalVarNum
+                        val delay = system.timeSpec match {
+                          case NoTime => {
+                            assert(false)
+                            (-1, 1)
+                          }
+                          case DiscreteTime(index) =>
+                            (newGlobal(index).asInstanceOf[IIntLit].value.intValueSafe -
+                              oldGlobal(index).asInstanceOf[IIntLit].value.intValueSafe, 1)
+                          case ContinuousTime(num, denom) =>
+                            (newGlobal(num).asInstanceOf[IIntLit].value.intValueSafe -
+                              oldGlobal(num).asInstanceOf[IIntLit].value.intValueSafe,
+                              oldGlobal(denom).asInstanceOf[IIntLit].value.intValueSafe)
+                        }
+
+                        updateGlobalVars(newGlobal)
+                        CEXTimeElapse(currentStates.toList, delay)
+
+                      }) getOrElse {
+
+                      throw new Exception("Could not recognise the clause: " + clause)
+
+                    }
+
+                  assert(currentStates.toSet == localAtoms.toSet)
+
+                  res
+
+                }).toList
+
+              val cexPair = (cexTrace, cex)
+
+              if (log) {
+                println
+                prettyPrint(cexPair)
+                println
               }
-             }).toSet
+              res = Right(cexPair)
 
-          if (log) {
-            println
-            println("Raw counterexample:")
-            (cex map (_._1)).prettyPrint
+            } else {
 
-            println
-            println("Involved processes:")
-            for ((process, id) <- processes) {
-              print("Process index: " + process)
-              system.processes(process) match {
-                case (_, Singleton) => println
-                case (_, Infinite)  => println(", id: " + id)
+              // we have to refine the chosen invariant schema
+              val processes =
+                (for ((atom@IAtom(globalPred, _), _) <- cex.iterator;
+                      if (globalPred != FALSE);
+                      localAtom <- (encoder decodeLocalStates atom).iterator) yield {
+                  val IAtom(pred, args) = localAtom
+                  val processIndex = system.localPredsSet indexWhere (_ contains pred)
+                  system.processes(processIndex) match {
+                    case (_, Singleton) => (processIndex, 0)
+                    case (_, Infinite) => (processIndex, args(system.globalVarNum))
+                  }
+                }).toSet
+
+              if (log) {
+                println
+                println("Raw counterexample:")
+                (cex map (_._1)).prettyPrint
+
+                println
+                println("Involved processes:")
+                for ((process, id) <- processes) {
+                  print("Process index: " + process)
+                  system.processes(process) match {
+                    case (_, Singleton) => println
+                    case (_, Infinite) => println(", id: " + id)
+                  }
+                }
+              } else {
+                println("Unsat, trying again with higher precision ...")
               }
+
+              invariants =
+                (invariants indexWhere { inv =>
+                  processes forall { case (i, _) => inv(i) > 0 }
+                }) match {
+                  case -1 => {
+                    // merge two invariants
+                    val relevantInvs = invariants filter { inv =>
+                      processes exists { case (i, _) => inv(i) > 0 }
+                    } sortBy (_.sum)
+                    assert(relevantInvs.size >= 2)
+
+                    val newInv = for ((a, b) <- relevantInvs(0) zip relevantInvs(1))
+                      yield (a + b)
+
+                    List(newInv) ++ (for (inv <- invariants;
+                                          if (inv != relevantInvs(0) && inv != relevantInvs(1)))
+                      yield inv)
+                  }
+                  case invIndex =>
+                    // increase arity of this invariant
+                    val oldInv = invariants(invIndex)
+
+                    val infProcesses = processes filter {
+                      case (i, _) => system.processes(i)._2 == Infinite
+                    }
+                    assert(!infProcesses.isEmpty)
+                    val (chosenProcess, _) =
+                      (for ((ind, ids) <- infProcesses groupBy (_._1);
+                            if (oldInv(ind) < ids.size))
+                        yield (ind, ids.size)).toSeq maxBy (_._2)
+
+                    val newInv = oldInv.updated(chosenProcess, oldInv(chosenProcess) + 1)
+
+                    invariants.updated(invIndex, newInv)
+                }
+
             }
-          } else {
-            println("Unsat, trying again with higher precision ...")
+
+            //        cex.prettyPrint
           }
 
-          invariants =
-          (invariants indexWhere { inv =>
-             processes forall { case (i, _) => inv(i) > 0 } }) match {
-            case -1 => {
-              // merge two invariants
-              val relevantInvs = invariants filter { inv =>
-                processes exists { case (i, _) => inv(i) > 0 } } sortBy (_.sum)
-              assert(relevantInvs.size >= 2)
+          case Left(rawSol) => {
+            res = Left(if (log) {
+              println("Solution:")
+              val solution = backTranslator translate rawSol
+              HornWrapper.verifySolution(solution, encoder.allClauses)
 
-              val newInv = for ((a, b) <- relevantInvs(0) zip relevantInvs(1))
-                           yield (a + b)
-
-              List(newInv) ++ (for (inv <- invariants;
-                                    if (inv != relevantInvs(0) && inv != relevantInvs(1)))
-                               yield inv)
+              for ((p, f) <- solution)
+                println("" + p + ": " + f)
+              println
+              Some(solution)
             }
-            case invIndex =>
-              // increase arity of this invariant
-              val oldInv = invariants(invIndex)
-
-              val infProcesses = processes filter {
-                case (i, _) => system.processes(i)._2 == Infinite }
-              assert(!infProcesses.isEmpty)
-              val (chosenProcess, _) =
-                (for ((ind, ids) <- infProcesses groupBy (_._1);
-                      if (oldInv(ind) < ids.size))
-                 yield (ind, ids.size)).toSeq maxBy (_._2)
-
-              val newInv = oldInv.updated(chosenProcess, oldInv(chosenProcess) + 1)
-
-              invariants.updated(invIndex, newInv)
+            else None
+            )
           }
-
         }
 
-//        cex.prettyPrint
       }
-
-      case Left(rawSol) => {
-        res = Left(if (log) {
-          println("Solution:")
-          val solution = backTranslator translate rawSol
-          HornWrapper.verifySolution(solution, encoder.allClauses)
-
-          for ((p, f) <- solution)
-            println("" + p + ": " + f)
-          println
-          Some(solution)
-        }
-          else None
-          )
-      }
-    }
-
     }
 
     res
