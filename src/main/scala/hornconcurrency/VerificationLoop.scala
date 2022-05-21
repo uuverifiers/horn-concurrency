@@ -232,7 +232,7 @@ class VerificationLoop(system : ParametricEncoder.System,
             clauseFors)
         }
         out.close
-        Left(None) // return dummy result
+        res = Left(None) // return dummy result
       } else {
 
         ////////////////////////////////////////////////////////////////////////////
