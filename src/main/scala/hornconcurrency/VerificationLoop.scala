@@ -30,17 +30,19 @@
 package hornconcurrency
 
 import ap.parser._
-import ap.util.Seqs
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
+import lazabs.horn.abstractions.AbstractionRecord.AbstractionMap
 import lazabs.{GlobalParameters, ParallelComputation}
 import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
-import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder, VerificationHints}
+import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder, VerificationHints}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
+import lazabs.horn.extendedquantifiers._
+import lazabs.horn.preprocessor.HornPreprocessor.ComposedBackTranslator
 
-import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
+import scala.collection.mutable.ArrayBuffer
 
 object VerificationLoop {
 
@@ -219,7 +221,7 @@ class VerificationLoop(system : ParametricEncoder.System,
       Console.withOut(out) {
         val clauseFors =
           for (c <- encoder.allClauses) yield {
-            val f = c.toFormula
+            val f = c.normalize.toFormula
             // eliminate remaining operators like eps
             Transform2Prenex(EquivExpander(PartialEvaluator(f)))
           }
@@ -240,7 +242,7 @@ class VerificationLoop(system : ParametricEncoder.System,
         println
 
         val preprocessor = new DefaultPreprocessor
-        val (simpClauses, simpHints, backTranslator) =
+        val (simpClauses, simpHints, backTranslatorSimp) =
           Console.withErr(Console.out) {
             preprocessor.process(encoder.allClauses, encoder.globalHints)
           }
@@ -251,7 +253,18 @@ class VerificationLoop(system : ParametricEncoder.System,
           else
             List()
 
-        val predAbsResult = ParallelComputation(params) {
+      val (backTranslator, predAbsResult) = ParallelComputation(params) {
+        if (simpClauses.flatMap(c => c.theories).exists(theory =>
+          theory.isInstanceOf[ExtendedQuantifier])) {
+          val instrLoop = new InstrumentationLoop(simpClauses,
+            simpHints,
+            templateBasedInterpolation,
+            templateBasedInterpol./ationTimeout,
+            templateBasedInterpolationType,
+            encoder.globalPredicateTemplates
+          )
+          (backTranslatorSimp, instrLoop.result)
+        } else {
           val interpolator = if (templateBasedInterpolation)
             Console.withErr(Console.out) {
               val builder =
@@ -261,7 +274,7 @@ class VerificationLoop(system : ParametricEncoder.System,
               val autoAbstractionMap =
                 builder.abstractionRecords
 
-              val abstractionMap =
+              val abstractionMap: AbstractionMap =
                 if (encoder.globalPredicateTemplates.isEmpty) {
                   autoAbstractionMap
                 } else {
@@ -288,10 +301,12 @@ class VerificationLoop(system : ParametricEncoder.System,
           println(
             "----------------------------------- CEGAR --------------------------------------")
 
-          new HornPredAbs(simpClauses,
+
+          (backTranslatorSimp, new HornPredAbs(simpClauses,
             simpHints.toInitialPredicates,
-            interpolator).result
+            interpolator).result)
         }
+      }
 
         ////////////////////////////////////////////////////////////////////////////
 

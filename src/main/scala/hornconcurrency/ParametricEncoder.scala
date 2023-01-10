@@ -1255,7 +1255,7 @@ class ParametricEncoder(system : ParametricEncoder.System,
           if (!preds.isEmpty))
      yield (p -> preds)).toMap
 
-  val globalPredicateTemplates =
+  val globalPredicateTemplates: Map[Predicate, Seq[VerifHintElement]] =
     (for ((p, hs) <- globalPredicateHints.iterator;
           hs2 = for (h <- hs; if (h.isInstanceOf[VerifHintTplElement])) yield h;
           if (!hs2.isEmpty))
