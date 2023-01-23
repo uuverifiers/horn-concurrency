@@ -259,7 +259,7 @@ class VerificationLoop(system : ParametricEncoder.System,
           val instrLoop = new InstrumentationLoop(simpClauses,
             simpHints,
             templateBasedInterpolation,
-            templateBasedInterpol./ationTimeout,
+            templateBasedInterpolationTimeout,
             templateBasedInterpolationType,
             encoder.globalPredicateTemplates
           )
