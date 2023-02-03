@@ -38,7 +38,7 @@ import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrap
 import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder, VerificationHints}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
-import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
+import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor, PreStagePreprocessor}
 import lazabs.horn.extendedquantifiers._
 import lazabs.horn.preprocessor.HornPreprocessor.ComposedBackTranslator
 
@@ -239,19 +239,24 @@ class VerificationLoop(system : ParametricEncoder.System,
 
         ////////////////////////////////////////////////////////////////////////////
 
-        println
+      println
 
-        val preprocessor = new DefaultPreprocessor
-        val (simpClauses, simpHints, backTranslatorSimp) =
-          Console.withErr(Console.out) {
-            preprocessor.process(encoder.allClauses, encoder.globalHints)
-          }
+      val preprocessor =
+        if (encoder.allClauses.flatMap(c => c.theories).exists(theory =>
+          theory.isInstanceOf[ExtendedQuantifier])) {
+          new PreStagePreprocessor
+        } else new DefaultPreprocessor
 
-        val params =
-          if (templateBasedInterpolationPortfolio)
-            GlobalParameters.get.withAndWOTemplates
-          else
-            List()
+      val (simpClauses, simpHints, backTranslatorSimp) =
+        Console.withErr(Console.out) {
+          preprocessor.process(encoder.allClauses, encoder.globalHints)
+        }
+
+      val params =
+        if (templateBasedInterpolationPortfolio)
+          GlobalParameters.get.withAndWOTemplates
+        else
+          List()
 
       val (backTranslator, predAbsResult) = ParallelComputation(params) {
         if (simpClauses.flatMap(c => c.theories).exists(theory =>
