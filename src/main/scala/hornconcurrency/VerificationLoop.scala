@@ -69,6 +69,10 @@ object VerificationLoop {
 
   type Counterexample = (Seq[CEXStep], Dag[(IAtom, HornClauses.Clause)])
 
+  class RunStatistics (val usedExtendedQuantifiers : Boolean,
+                       val extendedQuantifierSearchSpaceSizes : Map[Int, Int],
+                       val extendedQuantifierSearchNumSteps   : Map[Int, Int])
+  object NoRunStatistics extends RunStatistics(false, Map(), Map())
   //////////////////////////////////////////////////////////////////////////////
 
   def prettyPrint(cexPair : Counterexample) : Unit = {
@@ -178,7 +182,8 @@ class VerificationLoop(system : ParametricEncoder.System,
   import HornClauses.{Clause, FALSE}
   import Util._
 
-  val result : Either[Option[HornPreprocessor.Solution], Counterexample] = {
+  val result : (Either[Option[HornPreprocessor.Solution], Counterexample],
+                RunStatistics) = {
     val processNum = system.processes.size
 
     var invariants : Seq[Seq[Int]] =
@@ -196,7 +201,8 @@ class VerificationLoop(system : ParametricEncoder.System,
         }
       }
 
-    var res : Either[Option[HornPreprocessor.Solution], Counterexample] = null
+    var res : (Either[Option[HornPreprocessor.Solution], Counterexample],
+               RunStatistics) = null
 
     while (res == null) {
 
@@ -234,7 +240,7 @@ class VerificationLoop(system : ParametricEncoder.System,
             clauseFors)
         }
         out.close
-        res = Left(None) // return dummy result
+        res = (Left(None), NoRunStatistics) // return dummy result
       } else {
 
         ////////////////////////////////////////////////////////////////////////////
@@ -258,7 +264,7 @@ class VerificationLoop(system : ParametricEncoder.System,
         else
           List()
 
-      val (backTranslator, predAbsResult) = ParallelComputation(params) {
+      val (backTranslator, predAbsResult, runStats) = ParallelComputation(params) {
         if (simpClauses.flatMap(c => c.theories).exists(theory =>
           theory.isInstanceOf[ExtendedQuantifier])) {
           val instrLoop = new InstrumentationLoop(simpClauses,
@@ -268,7 +274,17 @@ class VerificationLoop(system : ParametricEncoder.System,
             templateBasedInterpolationType,
             encoder.globalPredicateTemplates
           )
-          (backTranslatorSimp, instrLoop.result)
+          val result = instrLoop.result
+          print("Search space sizes: ")
+          println(instrLoop.totalSearchSpaceSizesPerNumGhostRanges.toSeq.
+            sortBy(_._1).mkString(","))
+          print("Search steps: ")
+          println(instrLoop.totalSearchStepsPerNumGhostRanges.toSeq.
+            sortBy(_._1).mkString(","))
+          val stats = new RunStatistics(true,
+            instrLoop.totalSearchSpaceSizesPerNumGhostRanges,
+            instrLoop.totalSearchStepsPerNumGhostRanges)
+          (backTranslatorSimp, result, stats)
         } else {
           val interpolator = if (templateBasedInterpolation)
             Console.withErr(Console.out) {
@@ -309,7 +325,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
           (backTranslatorSimp, new HornPredAbs(simpClauses,
             simpHints.toInitialPredicates,
-            interpolator).result)
+            interpolator).result, NoRunStatistics)
         }
       }
 
@@ -335,7 +351,7 @@ class VerificationLoop(system : ParametricEncoder.System,
               if (log)
                 println("Background axioms are unsatisfiable")
 
-              res = Right((Nil, cex))
+              res = (Right((Nil, cex)), runStats)
 
             } else
 
@@ -632,7 +648,7 @@ class VerificationLoop(system : ParametricEncoder.System,
                 prettyPrint(cexPair)
                 println
               }
-              res = Right(cexPair)
+              res = (Right(cexPair), runStats)
 
             } else {
 
@@ -709,7 +725,7 @@ class VerificationLoop(system : ParametricEncoder.System,
           }
 
           case Left(rawSol) => {
-            res = Left(if (log) {
+            res = (Left(if (log) {
               println("Solution:")
               val solution = backTranslator translate rawSol
               HornWrapper.verifySolution(solution, encoder.allClauses)
@@ -720,7 +736,7 @@ class VerificationLoop(system : ParametricEncoder.System,
               Some(solution)
             }
             else None
-            )
+            ), runStats)
           }
         }
 
