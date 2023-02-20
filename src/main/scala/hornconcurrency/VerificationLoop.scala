@@ -38,6 +38,7 @@ import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrap
 import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder, VerificationHints}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
+import lazabs.horn.preprocessor.HornPreprocessor.CounterExample
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
 
 import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
@@ -172,7 +173,6 @@ class VerificationLoop(system : ParametricEncoder.System,
 {
   import VerificationLoop._
   import ParametricEncoder._
-  import VerificationHints._
   import HornClauses.{Clause, FALSE}
   import Util._
 
@@ -295,6 +295,22 @@ class VerificationLoop(system : ParametricEncoder.System,
 
         ////////////////////////////////////////////////////////////////////////////
 
+        def updateInvs(cex : CounterExample) : CounterExample = cex match {
+          case DagNode((IAtom(localPred, args), clause@Clause(_, _, _)), children, next) => {
+            val initTransitionsNonSeq : Seq[(Clause, Clause)] = // todo: why initTransitions a seq?
+              encoder.initTransitions.map(p => ((p._1, p._2.headOption.getOrElse(p._1))))
+            val (newPred, newClause) = (encoder.localTransitions ++
+                                        encoder.assertionTransitions ++ initTransitionsNonSeq) find
+                                       (_._1 == clause) match {
+              case Some(c) => (c._2.head.pred, c._2)
+              case None => (localPred, clause)
+            }
+            DagNode((IAtom(newPred, args), newClause), children, updateInvs(next))
+          }
+          case DagEmpty =>
+            DagEmpty
+        }
+
         predAbsResult match {
           case Right(rawCEX) => {
             if (log)
@@ -303,26 +319,14 @@ class VerificationLoop(system : ParametricEncoder.System,
             val fullCEX = backTranslator translate rawCEX
             HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
 
+            val fullCEXWithOriginalInvs = updateInvs(fullCEX)
+
             val cex = encoder pruneBackgroundClauses fullCEX
 
             // check whether the counterexample is entirely within the
             // background axioms
-            if (cex.subdagIterator forall {
-              case DagNode((_, clause), _, _) =>
-                encoder.backgroundClauses contains clause
-            }) {
-
-              if (log)
-                println("Background axioms are unsatisfiable")
-
-              res = Right((Nil, cex))
-
-            } else
-
-            // check whether the counterexample is good enough to
-            // reconstruct a genuine counterexample to system correctness
-            if (cex.subdagIterator forall {
-              case DagNode((_, clause), List(1), _) =>
+            val cexIsGoodEnough = (cex.subdagIterator forall {
+              case DagNode((_, clause), children, _) if children nonEmpty =>
                 (encoder.symmetryTransitions contains clause) ||
                   (encoder.localTransitions exists (_._1 == clause)) ||
                   (encoder.sendReceiveTransitions exists (_._1 == clause)) ||
@@ -333,7 +337,19 @@ class VerificationLoop(system : ParametricEncoder.System,
                 (encoder.initTransitions exists (_._1 == clause))
               case _ =>
                 false
-            }) {
+            })
+
+            val cexIsEntirelyWithinBackgroundClauses =
+              (cex.subdagIterator forall {
+                case DagNode((_, clause), _, _) =>
+                  encoder.backgroundClauses contains clause
+              })
+
+            if (cexIsEntirelyWithinBackgroundClauses) {
+              if (log)
+                println("Background axioms are unsatisfiable")
+              res = Right((Nil, fullCEXWithOriginalInvs))
+            } else if (cexIsGoodEnough) {
 
               import system.globalVarNum
 
@@ -605,7 +621,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
                 }).toList
 
-              val cexPair = (cexTrace, cex)
+              val cexPair = (cexTrace, fullCEXWithOriginalInvs)
 
               if (log) {
                 println
