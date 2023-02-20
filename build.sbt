@@ -13,13 +13,13 @@ lazy val commonSettings = Seq(
 // Jar files for the parsers
 
 lazy val parserSettings = Seq(
-  publishArtifact in packageDoc := false,
-  publishArtifact in packageSrc := false,
+  packageDoc / publishArtifact := false,
+  packageSrc / publishArtifact := false,
   exportJars := true,
   crossPaths := true
 )
 
-test in assembly := {}
+assembly / test := {}
 
 // Project
 
@@ -32,14 +32,14 @@ settings(
   //
   //scalaSource in Test := baseDirectory.value / "test/scala",
   //
-  scalacOptions in Compile ++=
+  Compile / scalacOptions ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
                                         case "2.11.12" => "-optimise"
                                         case "2.12.10" => "-opt:_"
                                       }}).value,
-  resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
+  resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.8" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
