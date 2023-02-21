@@ -319,37 +319,36 @@ class VerificationLoop(system : ParametricEncoder.System,
             val fullCEX = backTranslator translate rawCEX
             HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
 
-            val fullCEXWithOriginalInvs = updateInvs(fullCEX)
+            val fullCEXWithOriginalInvs = {
+              if (system.processes.size == 1)
+                updateInvs(fullCEX)
+              else fullCEX
+            }
 
             val cex = encoder pruneBackgroundClauses fullCEX
 
             // check whether the counterexample is entirely within the
             // background axioms
-            val cexIsGoodEnough = (cex.subdagIterator forall {
-              case DagNode((_, clause), children, _) if children nonEmpty =>
-                (encoder.symmetryTransitions contains clause) ||
-                  (encoder.localTransitions exists (_._1 == clause)) ||
-                  (encoder.sendReceiveTransitions exists (_._1 == clause)) ||
-                  (encoder.timeElapseTransitions contains clause) ||
-                  (encoder.assertionTransitions exists (_._1 == clause)) ||
-                  (encoder.barrierTransitions exists (_._1 == clause))
-              case DagNode((_, clause), List(), DagEmpty) =>
-                (encoder.initTransitions exists (_._1 == clause))
-              case _ =>
-                false
-            })
-
-            val cexIsEntirelyWithinBackgroundClauses =
-              (cex.subdagIterator forall {
-                case DagNode((_, clause), _, _) =>
-                  encoder.backgroundClauses contains clause
-              })
-
-            if (cexIsEntirelyWithinBackgroundClauses) {
+            if (cex.subdagIterator forall {
+              case DagNode((_, clause), _, _) =>
+                encoder.backgroundClauses contains clause
+            }) {
               if (log)
                 println("Background axioms are unsatisfiable")
               res = Right((Nil, fullCEXWithOriginalInvs))
-            } else if (cexIsGoodEnough) {
+            } else if (cex.subdagIterator forall { // check if the cex is good enough
+              case DagNode((_, clause), children, _) if children nonEmpty =>
+                (encoder.symmetryTransitions contains clause) ||
+                (encoder.localTransitions exists(_._1 == clause)) ||
+                (encoder.sendReceiveTransitions exists(_._1 == clause)) ||
+                (encoder.timeElapseTransitions contains clause) ||
+                (encoder.assertionTransitions exists(_._1 == clause)) ||
+                (encoder.barrierTransitions exists(_._1 == clause))
+              case DagNode((_, clause), List(), DagEmpty)                 =>
+                (encoder.initTransitions exists(_._1 == clause))
+              case _                                                      =>
+                false
+            }) {
 
               import system.globalVarNum
 
