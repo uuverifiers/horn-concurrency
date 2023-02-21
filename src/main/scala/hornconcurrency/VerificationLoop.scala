@@ -320,9 +320,10 @@ class VerificationLoop(system : ParametricEncoder.System,
             HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
 
             val fullCEXWithOriginalInvs = {
-              if (system.processes.size == 1)
-                updateInvs(fullCEX)
-              else fullCEX
+              if (system.processes.size > 1 ||
+                  system.processes.head._2 == ParametricEncoder.Infinite)
+                fullCEX
+              else updateInvs(fullCEX)
             }
 
             val cex = encoder pruneBackgroundClauses fullCEX
