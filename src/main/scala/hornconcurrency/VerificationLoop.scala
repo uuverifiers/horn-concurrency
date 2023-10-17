@@ -30,18 +30,18 @@
 package hornconcurrency
 
 import ap.parser._
-import ap.util.Seqs
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
 import lazabs.{GlobalParameters, ParallelComputation}
 import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
-import lazabs.horn.abstractions.{AbsLattice, AbstractionRecord, LoopDetector, StaticAbstractionBuilder, VerificationHints}
+import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
 import lazabs.horn.preprocessor.HornPreprocessor.CounterExample
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor}
+import lazabs.horn.symex._
 
-import scala.collection.mutable.{ArrayBuffer, LinkedHashSet, HashSet => MHashSet}
+import scala.collection.mutable.ArrayBuffer
 
 object VerificationLoop {
 
@@ -169,7 +169,11 @@ class VerificationLoop(system : ParametricEncoder.System,
                          StaticAbstractionBuilder.AbstractionType.RelationalEqs,
                        templateBasedInterpolationTimeout : Long = 2000,
                        log : Boolean = false,
-                       expectedStatus : String = "unknown")
+                       expectedStatus : String = "unknown",
+                       symbolicExecutionEngine : lazabs.GlobalParameters.SymexEngine.Value =
+                         lazabs.GlobalParameters.SymexEngine.None,
+                       symbolicExecutionDepth : Option[Int] = None,
+                       logSymbolicExecution : Boolean = false)
 {
   import VerificationLoop._
   import ParametricEncoder._
@@ -219,7 +223,7 @@ class VerificationLoop(system : ParametricEncoder.System,
       Console.withOut(out) {
         val clauseFors =
           for (c <- encoder.allClauses) yield {
-            val f = c.toFormula
+            val f = c.normalize.toFormula
             // eliminate remaining operators like eps
             Transform2Prenex(EquivExpander(PartialEvaluator(f)))
           }
@@ -251,46 +255,56 @@ class VerificationLoop(system : ParametricEncoder.System,
           else
             List()
 
-        val predAbsResult = ParallelComputation(params) {
-          val interpolator = if (templateBasedInterpolation)
-            Console.withErr(Console.out) {
-              val builder =
-                new StaticAbstractionBuilder(
-                  simpClauses,
-                  templateBasedInterpolationType)
-              val autoAbstractionMap =
-                builder.abstractionRecords
+        val predAbsResult = ParallelComputation(params){
+          if (symbolicExecutionEngine != GlobalParameters.SymexEngine.None) {
+            val symex : Symex[Clause] = symbolicExecutionEngine match {
+              case GlobalParameters.SymexEngine.BreadthFirstForward =>
+                new BreadthFirstForwardSymex[Clause](simpClauses,
+                                                     symbolicExecutionDepth)
+              case GlobalParameters.SymexEngine.DepthFirstForward =>
+                new DepthFirstForwardSymex[Clause](simpClauses)
+            }
+            symex.printInfo = logSymbolicExecution
+            val res = symex.solve()
+            symex.shutdown
+            res
+          } else {
+            val interpolator = if (templateBasedInterpolation)
+              Console.withErr(Console.out){
+                val builder = new StaticAbstractionBuilder(
+                  simpClauses,templateBasedInterpolationType)
+                val autoAbstractionMap = builder.abstractionRecords
+                val abstractionMap =
+                  if (encoder.globalPredicateTemplates.isEmpty) {
+                    autoAbstractionMap
+                  } else {
+                    val loopDetector = builder.loopDetector
 
-              val abstractionMap =
-                if (encoder.globalPredicateTemplates.isEmpty) {
-                  autoAbstractionMap
-                } else {
-                  val loopDetector = builder.loopDetector
+                    print("Using interpolation templates provided in program: ")
 
-                  print("Using interpolation templates provided in program: ")
+                    val hintsAbstractionMap =
+                      loopDetector hints2AbstractionRecord simpHints
 
-                  val hintsAbstractionMap =
-                    loopDetector hints2AbstractionRecord simpHints
+                    println(hintsAbstractionMap.keys.toSeq sortBy (_.name) mkString ", ")
 
-                  println(hintsAbstractionMap.keys.toSeq sortBy (_.name) mkString ", ")
+                    AbstractionRecord.mergeMaps(autoAbstractionMap, hintsAbstractionMap)
+                  }
 
-                  AbstractionRecord.mergeMaps(autoAbstractionMap, hintsAbstractionMap)
-                }
+                TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(
+                  abstractionMap,
+                  templateBasedInterpolationTimeout)
+              } else {
+              DagInterpolator.interpolatingPredicateGenCEXAndOr _
+            }
 
-              TemplateInterpolator.interpolatingPredicateGenCEXAbsGen(
-                abstractionMap,
-                templateBasedInterpolationTimeout)
-            } else {
-            DagInterpolator.interpolatingPredicateGenCEXAndOr _
+            println
+            println(
+              "----------------------------------- CEGAR --------------------------------------")
+
+            new HornPredAbs(simpClauses,
+              simpHints.toInitialPredicates,
+              interpolator).result
           }
-
-          println
-          println(
-            "----------------------------------- CEGAR --------------------------------------")
-
-          new HornPredAbs(simpClauses,
-            simpHints.toInitialPredicates,
-            interpolator).result
         }
 
         ////////////////////////////////////////////////////////////////////////////
