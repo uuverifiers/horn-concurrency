@@ -2,7 +2,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "10.0.0",
+  version := "1.0-ext",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.10"),
   homepage := Some(url("https://github.com/uuverifiers/horn-concurrency")),
@@ -13,13 +13,13 @@ lazy val commonSettings = Seq(
 // Jar files for the parsers
 
 lazy val parserSettings = Seq(
-  publishArtifact in packageDoc := false,
-  publishArtifact in packageSrc := false,
+  packageDoc / publishArtifact := false,
+  packageSrc / publishArtifact := false,
   exportJars := true,
   crossPaths := true
 )
 
-test in assembly := {}
+assembly / test := {}
 
 // Project
 
@@ -32,7 +32,7 @@ settings(
   //
   //scalaSource in Test := baseDirectory.value / "test/scala",
   //
-  scalacOptions in Compile ++=
+  Compile / scalacOptions ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
@@ -41,7 +41,7 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "10.0.0" exclude(
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
   //
