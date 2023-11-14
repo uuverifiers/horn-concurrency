@@ -42,8 +42,8 @@ class BackgroundAxiomsTests extends FlatSpec {
 
   def isSolvable(vl : VerificationLoop) : Boolean =
     vl.result match {
-      case Right(_) => false // not solveable
-      case Left(_) => true // solveable
+      case (Right(_), _) => false // not solveable
+      case (Left(_), _) => true // solveable
     }
 
   "Background Axioms test 1" should "be SOLVABLE" in {

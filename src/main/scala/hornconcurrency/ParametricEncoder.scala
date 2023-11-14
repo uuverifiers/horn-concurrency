@@ -530,6 +530,195 @@ object ParametricEncoder {
              backgroundAxioms)
     }
 
+    /**
+     * Same as mergeLocalTransitions, but also returns a backmapping
+     * from the merged clauses to the original clauses
+     */
+    def mergeLocalTransitionsWithBackMapping : (System, Map[Clause, Seq[Clause]]) = {
+      val backMapping = new MHashMap[Clause, Seq[Clause]]
+
+      val predsToKeep, predsWithTimeInvs = new MHashSet[Predicate]
+      for (c <- timeInvariants) {
+        predsToKeep ++= c.predicates
+        predsWithTimeInvs ++= c.predicates
+      }
+      for (c <- assertions)
+        predsToKeep ++= c.predicates
+
+      // also keep initial states
+      for (clauses <- localInitClauses.iterator; c <- clauses.iterator)
+        predsToKeep ++= c.predicates
+
+      // lastly keep all other requested preds
+      predsToKeep ++= otherPredsToKeep
+
+      def isLocalClause(p : (Clause, Synchronisation)) = p match {
+        case (clause@Clause(head@IAtom(_, headArgs),
+        ClauseBody(body@List(IAtom(_, bodyArgs)), _),
+        constraint), NoSync) =>
+          Seqs.disjoint(predsWithTimeInvs, clause.predicates) && {
+            val globalHeadArgs =
+              (for (IConstant(c) <- headArgs take globalVarNum) yield c).toSet
+
+            (globalHeadArgs.size == globalVarNum) &&
+              (headArgs take globalVarNum) == (bodyArgs take globalVarNum) && {
+              val occurringConstants = new MHashSet[ConstantTerm]
+              val coll = new SymbolCollector(null, occurringConstants, null)
+              coll.visitWithoutResult(constraint, 0)
+              for (IAtom(_, args) <- (Iterator single head) ++ body.iterator)
+                for (t <- args drop globalVarNum)
+                  coll.visitWithoutResult(t, 0)
+              Seqs.disjoint(globalHeadArgs, occurringConstants)
+            }
+          }
+        case _ => false
+      }
+
+      val newProcesses =
+        (for (((clauses, repl), preds) <-
+                processes.iterator zip localPreds.iterator) yield {
+          val clauseBuffer = clauses.toBuffer
+
+          // sort the predicates, to eliminate first predicates with high arity,
+          // and then predicates with few incoming clauses
+          val predsBuffer =
+          ((for (pred <- preds.iterator;
+                 if !(predsToKeep contains pred);
+                 incoming =
+                 for (p@(Clause(IAtom(`pred`, _), _, _), _) <- clauseBuffer)
+                   yield p)
+            yield (pred, incoming.size)).toVector
+            .sortBy(t => (-t._1.arity, t._2))
+            .map(_._1)).toBuffer
+
+
+          val predIncomingMap = new MHashMap[Predicate, ArrayBuffer[(Clause, Synchronisation)]]
+          val predOutgoingMap = new MHashMap[Predicate, ArrayBuffer[(Clause, Synchronisation)]]
+
+          // todo: merge with above loop?
+          for (pred <- preds.iterator) {
+            predIncomingMap += ((pred, new ArrayBuffer[(Clause, Synchronisation)]))
+            predOutgoingMap += ((pred, new ArrayBuffer[(Clause, Synchronisation)]))
+            for (clause <- clauseBuffer) {
+              clause match {
+                case c@(Clause(IAtom(`pred`, _), _, _), _) =>
+                  predIncomingMap(pred) += c
+                case c@(Clause(_, ClauseBody(List(IAtom(`pred`, _)), _), _), _) =>
+                  predOutgoingMap(pred) += c
+                case _ =>
+              }
+            }
+          }
+
+          var changed = true
+          while (changed) {
+            changed = false
+
+            val predsIt = predsBuffer.iterator
+            while (!changed && predsIt.hasNext) {
+              val pred = predsIt.next
+              val incoming = predIncomingMap(pred)
+              val outgoing = predOutgoingMap(pred)
+
+              if (// avoid blow-up
+                (incoming.size * outgoing.size <=
+                  incoming.size + outgoing.size) &&
+                  (incoming forall {
+                    case (c, _) => !(c.bodyPredicates contains pred) &&
+                      (!outgoing.isEmpty ||
+                        Seqs.disjoint(predsWithTimeInvs,
+                          c.predicates))
+                  }) &&
+                  (outgoing forall {
+                    case (c, _) => c.head.pred != pred
+                  })) {
+
+                val newClauses =
+                  if (incoming forall (isLocalClause(_)))
+                    for ((c1, _) <- incoming; (c2, s) <- outgoing;
+                         newClause = merge(c2, c1);
+                         if !newClause.hasUnsatConstraint)
+                      yield {
+                        val originalClauses : Seq[Clause] =
+                          backMapping.getOrElse(c1, Seq(c1)) ++
+                            backMapping.getOrElse(c2, Seq(c2))
+                        backMapping.put(newClause, originalClauses)
+                        (newClause, s)
+                      }
+                  else if (!outgoing.isEmpty &&
+                    (outgoing forall (isLocalClause(_))))
+                    for ((c1, s) <- incoming; (c2, _) <- outgoing;
+                         newClause = merge(c2, c1);
+                         if !newClause.hasUnsatConstraint)
+                      yield {
+                        val originalClauses : Seq[Clause] =
+                          backMapping.getOrElse(c1, Seq(c1)) ++
+                            backMapping.getOrElse(c2, Seq(c2))
+                        backMapping.put(newClause, originalClauses)
+                        (newClause, s)
+                      }
+                  else
+                    null
+
+                if (newClauses != null) {
+                  predsBuffer -= pred
+                  changed = true
+
+                  for (c@(Clause(IAtom(p1, _), ClauseBody(List(IAtom(p2, _)), _), _), _) <- incoming ++ outgoing) {
+                    predIncomingMap(p1) -= c
+                    predOutgoingMap(p2) -= c
+                  }
+
+                  for (c@(Clause(IAtom(p1, _), ClauseBody(List(IAtom(p2, _)), _), _), _) <- newClauses) {
+                    predIncomingMap(p1) += c
+                    predOutgoingMap(p2) += c
+                  }
+
+                }
+              }
+            }
+          }
+          ((for ((_, clauses) <- predIncomingMap) yield
+            clauses).flatten.toList, repl)
+        }).toList
+
+      val allPreds = allPredicates(newProcesses) + HornClauses.FALSE
+
+      val newAssertions =
+        assertions filter {
+          clause => clause.predicates subsetOf (allPreds ++ backgroundPreds) }
+      newAssertions.foreach(clause => backMapping.put(clause, Seq(clause)))
+
+      // we need to remove deleted predicates also from the barriers
+      val newBarriers = new MHashMap[Barrier, Barrier]
+
+      def filterBarrier(b : Barrier) =
+        newBarriers.getOrElseUpdate(b, b filterDomains allPreds)
+
+      val newProcesses2 =
+        for ((process, repl) <- newProcesses) yield {
+          val newClauses =
+            for ((clause, sync) <- process) yield sync match {
+              case BarrierSync(b) => (clause, BarrierSync(filterBarrier(b)))
+              case s              => (clause, s)
+            }
+          (newClauses, repl)
+        }
+
+      val newSystem = System(newProcesses2,
+        globalVarNum,
+        globalVarAssumptions,
+        timeSpec,
+        timeInvariants,
+        newAssertions,
+        hints filterPredicates allPreds,
+        backgroundAxioms)
+      (newSystem, backMapping.filter{
+        case (newC, _) =>
+          newSystem.processes.exists(p => p._1.exists(_._1 == newC)) ||
+            newAssertions.contains(newC)
+      }.toMap)
+    }
   }
 
     /**

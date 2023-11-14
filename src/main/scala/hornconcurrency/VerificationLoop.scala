@@ -34,13 +34,14 @@ import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
 import lazabs.horn.abstractions.AbstractionRecord.AbstractionMap
 import lazabs.{GlobalParameters, ParallelComputation}
-import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper, Util}
-import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder, VerificationHints}
+import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrapper}
+import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
+import lazabs.horn.preprocessor.HornPreprocessor.CounterExample
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor, PreStagePreprocessor}
+import lazabs.horn.symex._
 import lazabs.horn.extendedquantifiers._
-import lazabs.horn.preprocessor.HornPreprocessor.ComposedBackTranslator
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -174,13 +175,16 @@ class VerificationLoop(system : ParametricEncoder.System,
                          StaticAbstractionBuilder.AbstractionType.RelationalEqs,
                        templateBasedInterpolationTimeout : Long = 2000,
                        log : Boolean = false,
-                       expectedStatus : String = "unknown")
+                       expectedStatus : String = "unknown",
+                       symbolicExecutionEngine : lazabs.GlobalParameters.SymexEngine.Value =
+                         lazabs.GlobalParameters.SymexEngine.None,
+                       symbolicExecutionDepth : Option[Int] = None,
+                       logSymbolicExecution : Boolean = false)
 {
   import VerificationLoop._
   import ParametricEncoder._
-  import VerificationHints._
   import HornClauses.{Clause, FALSE}
-  import Util._
+  import lazabs.horn.bottomup.Util._
 
   val result : (Either[Option[HornPreprocessor.Solution], Counterexample],
                 RunStatistics) = {
@@ -285,16 +289,24 @@ class VerificationLoop(system : ParametricEncoder.System,
             instrLoop.totalSearchSpaceSizesPerNumGhostRanges,
             instrLoop.totalSearchStepsPerNumGhostRanges)
           (backTranslatorSimp, result, stats)
+        } else if (symbolicExecutionEngine != GlobalParameters.SymexEngine.None) {
+          val symex : Symex[Clause] = symbolicExecutionEngine match {
+            case GlobalParameters.SymexEngine.BreadthFirstForward =>
+              new BreadthFirstForwardSymex[Clause](simpClauses,
+                symbolicExecutionDepth)
+            case GlobalParameters.SymexEngine.DepthFirstForward =>
+              new DepthFirstForwardSymex[Clause](simpClauses)
+          }
+          symex.printInfo = logSymbolicExecution
+          val res = symex.solve()
+          symex.shutdown
+          (backTranslatorSimp, res, NoRunStatistics)
         } else {
           val interpolator = if (templateBasedInterpolation)
-            Console.withErr(Console.out) {
-              val builder =
-                new StaticAbstractionBuilder(
-                  simpClauses,
-                  templateBasedInterpolationType)
-              val autoAbstractionMap =
-                builder.abstractionRecords
-
+            Console.withErr(Console.out){
+              val builder = new StaticAbstractionBuilder(
+                simpClauses,templateBasedInterpolationType)
+              val autoAbstractionMap = builder.abstractionRecords
               val abstractionMap: AbstractionMap =
                 if (encoder.globalPredicateTemplates.isEmpty) {
                   autoAbstractionMap
@@ -331,6 +343,22 @@ class VerificationLoop(system : ParametricEncoder.System,
 
         ////////////////////////////////////////////////////////////////////////////
 
+        def updateInvs(cex : CounterExample) : CounterExample = cex match {
+          case DagNode((IAtom(localPred, args), clause@Clause(_, _, _)), children, next) => {
+            val initTransitionsNonSeq : Seq[(Clause, Clause)] = // todo: why initTransitions a seq?
+              encoder.initTransitions.map(p => ((p._1, p._2.headOption.getOrElse(p._1))))
+            val (newPred, newClause) = (encoder.localTransitions ++
+                                        encoder.assertionTransitions ++ initTransitionsNonSeq) find
+                                       (_._1 == clause) match {
+              case Some(c) => (c._2.head.pred, c._2)
+              case None => (localPred, clause)
+            }
+            DagNode((IAtom(newPred, args), newClause), children, updateInvs(next))
+          }
+          case DagEmpty =>
+            DagEmpty
+        }
+
         predAbsResult match {
           case Right(rawCEX) => {
             if (log)
@@ -338,6 +366,13 @@ class VerificationLoop(system : ParametricEncoder.System,
 
             val fullCEX = backTranslator translate rawCEX
             HornWrapper.verifyCEX(fullCEX, encoder.allClauses)
+
+            val fullCEXWithOriginalInvs = {
+              if (system.processes.size > 1 ||
+                  system.processes.head._2 == ParametricEncoder.Infinite)
+                fullCEX
+              else updateInvs(fullCEX)
+            }
 
             val cex = encoder pruneBackgroundClauses fullCEX
 
@@ -350,24 +385,18 @@ class VerificationLoop(system : ParametricEncoder.System,
 
               if (log)
                 println("Background axioms are unsatisfiable")
-
-              res = (Right((Nil, cex)), runStats)
-
-            } else
-
-            // check whether the counterexample is good enough to
-            // reconstruct a genuine counterexample to system correctness
-            if (cex.subdagIterator forall {
-              case DagNode((_, clause), List(1), _) =>
+              res = (Right((Nil, fullCEXWithOriginalInvs)), runStats)
+            } else if (cex.subdagIterator forall { // check if the cex is good enough
+              case DagNode((_, clause), children, _) if children nonEmpty =>
                 (encoder.symmetryTransitions contains clause) ||
-                  (encoder.localTransitions exists (_._1 == clause)) ||
-                  (encoder.sendReceiveTransitions exists (_._1 == clause)) ||
-                  (encoder.timeElapseTransitions contains clause) ||
-                  (encoder.assertionTransitions exists (_._1 == clause)) ||
-                  (encoder.barrierTransitions exists (_._1 == clause))
-              case DagNode((_, clause), List(), DagEmpty) =>
-                (encoder.initTransitions exists (_._1 == clause))
-              case _ =>
+                (encoder.localTransitions exists(_._1 == clause)) ||
+                (encoder.sendReceiveTransitions exists(_._1 == clause)) ||
+                (encoder.timeElapseTransitions contains clause) ||
+                (encoder.assertionTransitions exists(_._1 == clause)) ||
+                (encoder.barrierTransitions exists(_._1 == clause))
+              case DagNode((_, clause), List(), DagEmpty)                 =>
+                (encoder.initTransitions exists(_._1 == clause))
+              case _                                                      =>
                 false
             }) {
 
@@ -641,7 +670,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
                 }).toList
 
-              val cexPair = (cexTrace, cex)
+              val cexPair = (cexTrace, fullCEXWithOriginalInvs)
 
               if (log) {
                 println

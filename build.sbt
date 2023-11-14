@@ -2,7 +2,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "1.0-ext",
+  version := "1.1-ext",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.10"),
   homepage := Some(url("https://github.com/uuverifiers/horn-concurrency")),
@@ -39,7 +39,7 @@ settings(
                                         case "2.11.12" => "-optimise"
                                         case "2.12.10" => "-opt:_"
                                       }}).value,
-  resolvers += "uuverifiers" at "http://logicrunch.research.it.uu.se/maven/",
+  resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
   libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
