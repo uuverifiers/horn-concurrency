@@ -41,7 +41,13 @@ settings(
                                       }}).value,
   resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext" exclude(
+// Use the following dependency if you publishLocal Eldarica,
+// but do not push this change to the repo.
+//  libraryDependencies += "uuverifiers" %% "eldarica" % "2.0.9-ext" exclude(
+//    "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
+  resolvers += "jitpack" at "https://jitpack.io",
+// Disable the following dependency if you publishLocal Eldarica.
+  libraryDependencies += "com.github.zafer-esen" % "eldarica" % "master" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
   //
