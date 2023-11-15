@@ -47,7 +47,7 @@ settings(
 //    "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
   resolvers += "jitpack" at "https://jitpack.io",
 // Disable the following dependency if you publishLocal Eldarica.
-  libraryDependencies += "com.github.zafer-esen" % "eldarica" % "master" exclude(
+  libraryDependencies += "com.github.zafer-esen" % "eldarica" % "master-SNAPSHOT" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
   //
