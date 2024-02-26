@@ -4,7 +4,7 @@ lazy val commonSettings = Seq(
   organization := "uuverifiers",
   version := "1.1-ext",
   scalaVersion := "2.11.12",
-  crossScalaVersions := Seq("2.11.12", "2.12.10"),
+  crossScalaVersions := Seq("2.11.12", "2.12.18"),
   homepage := Some(url("https://github.com/uuverifiers/horn-concurrency")),
   licenses := Seq("BSD License 2.0" -> url("https://github.com/uuverifiers/eldarica/blob/master/LICENSE")),
   publishTo := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) )
@@ -37,9 +37,9 @@ settings(
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
                                         case "2.11.12" => "-optimise"
-                                        case "2.12.10" => "-opt:_"
+                                        case "2.12.18" => "-opt:_"
                                       }}).value,
-  resolvers += ("uuverifiers" at "http://logicrunch.research.it.uu.se/maven/").withAllowInsecureProtocol(true),
+  resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
 // Use the following dependency if you publishLocal Eldarica,
 // but do not push this change to the repo.
