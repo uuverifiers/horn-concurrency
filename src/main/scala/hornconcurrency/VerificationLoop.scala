@@ -38,10 +38,11 @@ import lazabs.horn.bottomup.{DagInterpolator, HornClauses, HornPredAbs, HornWrap
 import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder}
 import lazabs.horn.bottomup.TemplateInterpolator
 import lazabs.horn.bottomup.Util.Dag
+import lazabs.horn.extendedquantifiers.{InstrumentationLoop, InstrumentationOperator}
 import lazabs.horn.preprocessor.HornPreprocessor.CounterExample
 import lazabs.horn.preprocessor.{DefaultPreprocessor, HornPreprocessor, PreStagePreprocessor}
 import lazabs.horn.symex._
-import lazabs.horn.extendedquantifiers._
+import lazabs.horn.extendedquantifiers.theories.AbstractExtendedQuantifier
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -171,7 +172,7 @@ class VerificationLoop(system : ParametricEncoder.System,
                        templateBasedInterpolationPortfolio : Boolean = false,
                        templateBasedInterpolation : Boolean = true,
                        templateBasedInterpolationType :
-                           StaticAbstractionBuilder.AbstractionType.Value =
+                         StaticAbstractionBuilder.AbstractionType.Value =
                          StaticAbstractionBuilder.AbstractionType.RelationalEqs,
                        templateBasedInterpolationTimeout : Long = 2000,
                        log : Boolean = false,
@@ -179,7 +180,9 @@ class VerificationLoop(system : ParametricEncoder.System,
                        symbolicExecutionEngine : lazabs.GlobalParameters.SymexEngine.Value =
                          lazabs.GlobalParameters.SymexEngine.None,
                        symbolicExecutionDepth : Option[Int] = None,
-                       logSymbolicExecution : Boolean = false)
+                       logSymbolicExecution : Boolean = false,
+                       extendedQuantifierToInstrumentationOperator :
+                        Map[AbstractExtendedQuantifier, InstrumentationOperator] = Map())
 {
   import VerificationLoop._
   import ParametricEncoder._
@@ -253,7 +256,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
       val preprocessor =
         if (encoder.allClauses.flatMap(c => c.theories).exists(theory =>
-          theory.isInstanceOf[ExtendedQuantifier])) {
+          theory.isInstanceOf[AbstractExtendedQuantifier])) {
           new PreStagePreprocessor
         } else new DefaultPreprocessor
 
@@ -270,9 +273,10 @@ class VerificationLoop(system : ParametricEncoder.System,
 
       val (backTranslator, predAbsResult, runStats) = ParallelComputation(params) {
         if (simpClauses.flatMap(c => c.theories).exists(theory =>
-          theory.isInstanceOf[ExtendedQuantifier])) {
+          theory.isInstanceOf[AbstractExtendedQuantifier])) {
           val instrLoop = new InstrumentationLoop(simpClauses,
             simpHints,
+            extendedQuantifierToInstrumentationOperator,
             templateBasedInterpolation,
             templateBasedInterpolationTimeout,
             templateBasedInterpolationType,
