@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2014 Pavle Subotic. All rights reserved.
+ * Copyright (c) 2011-2014 Pavle Subotic, 2024 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,7 +30,8 @@
 package hornconcurrency
 
 import ap.parser._
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util}
+import lazabs.horn.Util
+import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
 object MainBenchmarks extends App {
 
@@ -57,8 +58,7 @@ object MainBenchmarks extends App {
   println("Solving ...")
   
   val predAbs =
-    new HornPredAbs(enc.allClauses, Map(),
-                    DagInterpolator.interpolatingPredicateGenCEXAndOr _)
+    new HornPredAbs(enc.allClauses)
 
   println
   predAbs.result match {

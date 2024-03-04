@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2022 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2022-2024 Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,7 +31,7 @@ import org.scalatest._
 import hornconcurrency._
 
 import ap.parser._
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util}
+import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
 class BackgroundAxiomsTests extends FlatSpec {
   import HornClauses._

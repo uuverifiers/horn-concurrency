@@ -31,7 +31,8 @@ import org.scalatest._
 import hornconcurrency._
 
 import ap.parser._
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, DagInterpolator, Util}
+import lazabs.horn.Util
+import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
 class VerificationLoopTests extends FlatSpec {
   import HornClauses._
@@ -44,8 +45,7 @@ class VerificationLoopTests extends FlatSpec {
     println("Solving ...")
 
     val predAbs =
-      new HornPredAbs(enc.allClauses, Map(),
-                      DagInterpolator.interpolatingPredicateGenCEXAndOr _)
+      new HornPredAbs(enc.allClauses)
 
     println
     predAbs.result match {

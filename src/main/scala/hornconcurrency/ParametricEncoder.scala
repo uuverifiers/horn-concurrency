@@ -33,7 +33,8 @@ import ap.parser._
 import ap.types.MonoSortedPredicate
 import ap.util.{Seqs, Combinatorics}
 
-import lazabs.horn.bottomup.{HornClauses, Util}
+import lazabs.horn.Util
+import lazabs.horn.bottomup.HornClauses
 import lazabs.horn.bottomup.HornPredAbs.predArgumentSorts
 import lazabs.horn.abstractions.{VerificationHints, EmptyVerificationHints}
 import lazabs.horn.preprocessor.HornPreprocessor
