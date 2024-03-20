@@ -33,8 +33,8 @@ import ap.parser._
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
 import lazabs.{GlobalParameters, ParallelComputation}
-import lazabs.horn.Util
-import lazabs.horn.bottomup.{HornClauses, HornPredAbs, HornWrapper}
+import lazabs.horn.{Util, HornWrapper}
+import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 import lazabs.horn.abstractions.{AbstractionRecord, StaticAbstractionBuilder}
 import lazabs.horn.Util.Dag
 import lazabs.horn.preprocessor.HornPreprocessor.CounterExample
