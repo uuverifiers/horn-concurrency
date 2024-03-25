@@ -1,22 +1,30 @@
-
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "1.1",
+  version := "2.1",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.18"),
+  description := "Encoding of concurrent or replicated programs using Horn clauses",
   homepage := Some(url("https://github.com/uuverifiers/horn-concurrency")),
   licenses := Seq("BSD License 2.0" -> url("https://github.com/uuverifiers/eldarica/blob/master/LICENSE")),
-  publishTo := Some(Resolver.file("file",  new File( "/home/wv/public_html/maven/" )) )
-)
-
-// Jar files for the parsers
-
-lazy val parserSettings = Seq(
-  packageDoc / publishArtifact := false,
-  packageSrc / publishArtifact := false,
-  exportJars := true,
-  crossPaths := true
+  scmInfo  := Some(ScmInfo(
+    url("https://github.com/uuverifiers/horn-concurrency"),
+        "scm:git@github.com/uuverifiers/horn-concurrency.git")),
+  developers := List(
+    Developer(
+      id    = "pruemmer",
+      name  = "Philipp Ruemmer",
+      email = "ph_r@gmx.net",
+      url   = url("https://philipp.ruemmer.org")
+    ),
+    Developer(
+      id    = "zafer.esen",
+      name  = "Zafer Esen",
+      email = "zafer.esen@it.uu.se",
+      url   = url("https://katalog.uu.se/empinfo/?id=N18-2424")
+    )
+  ),
+  publishTo := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )))
 )
 
 assembly / test := {}
@@ -28,10 +36,6 @@ lazy val root = (project in file(".")).
 
 //
 settings(
-  //scalaSource in Compile := baseDirectory.value / "src",
-  //
-  //scalaSource in Test := baseDirectory.value / "test/scala",
-  //
   Compile / scalacOptions ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
@@ -41,7 +45,6 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT" exclude(
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
-  //
