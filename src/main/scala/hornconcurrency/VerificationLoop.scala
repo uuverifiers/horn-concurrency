@@ -202,41 +202,64 @@ class VerificationLoop(system : ParametricEncoder.System,
     var res : Either[Option[HornPreprocessor.Solution], Counterexample] = null
 
     while (res == null) {
-
-    println
-    println("Using invariants " + (invariants mkString ", "))
-    println
-
-    val encoder =  new ParametricEncoder (system, invariants)
-
-    ////////////////////////////////////////////////////////////////////////////
-
-    if (printIntermediateClauseSets) {
-      //val basename = fileName
-      //val suffix =
-      //  (for (inv <- invariants) yield (inv mkString "_")) mkString "--"
-      //val filename = basename + "-" + suffix + ".smt2"
-
       println
-      println("Writing Horn clauses to " + fileName)
+      println("Using invariants " + (invariants mkString ", "))
+      println
 
-      val out = new java.io.FileOutputStream(fileName)
-      Console.withOut(out) {
-        val clauseFors =
-          for (c <- encoder.allClauses) yield {
-            val f = c.normalize.toFormula
-            // eliminate remaining operators like eps
-            Transform2Prenex(EquivExpander(PartialEvaluator(f)))
+      val encoder =  new ParametricEncoder (system, invariants)
+
+      ////////////////////////////////////////////////////////////////////////////
+
+      val printAndExit =
+        printIntermediateClauseSets ||
+        lazabs.GlobalParameters.get.printHornSimplified ||
+        lazabs.GlobalParameters.get.printHornSimplifiedSMT
+
+      if (printAndExit) {
+        if (printIntermediateClauseSets) {
+          println
+          println("Writing Horn clauses to " + fileName)
+
+          val out = new java.io.FileOutputStream(fileName)
+          Console.withOut(out){
+            val clauseFors =
+              for (c <- encoder.allClauses) yield {
+                val f = c.normalize.toFormula
+                // eliminate remaining operators like eps
+                Transform2Prenex(EquivExpander(PartialEvaluator(f)))
+              }
+
+            val allPredicates =
+              HornClauses allPredicates encoder.allClauses
+
+            SMTLineariser("C_VC", "HORN", expectedStatus,
+                          List(), allPredicates.toSeq.sortBy(_.name),
+                          clauseFors)
           }
-
-        val allPredicates =
-          HornClauses allPredicates encoder.allClauses
-
-          SMTLineariser("C_VC", "HORN", expectedStatus,
-            List(), allPredicates.toSeq.sortBy(_.name),
-            clauseFors)
+          out.close
         }
-        out.close
+        if (GlobalParameters.get.printHornSimplified ||
+            GlobalParameters.get.printHornSimplifiedSMT) {
+          val preprocessor = new DefaultPreprocessor
+          val (simpClauses, _, _) =
+            Console.withErr(Console.out) {
+              preprocessor.process(encoder.allClauses, encoder.globalHints)
+            }
+          if (GlobalParameters.get.printHornSimplified) {
+            println("Clauses after preprocessing:")
+            for (c <- simpClauses)
+              println(c.toPrologString)
+          } else {
+            val predsToDeclare =
+              (for (c <- simpClauses
+                    if c.head.pred != FALSE) yield {
+                c.predicates
+              }).flatten.toSet.toList
+
+            SMTLineariser("", "HORN", "", Nil, predsToDeclare,
+                          simpClauses.map(_ toFormula))
+          }
+        }
         res = Left(None) // return dummy result
       } else {
 
