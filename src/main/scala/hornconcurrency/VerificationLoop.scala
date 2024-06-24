@@ -161,7 +161,8 @@ object VerificationLoop {
 
 class VerificationLoop(system : ParametricEncoder.System,
                        initialInvariants : Seq[Seq[Int]] = null,
-                       printIntermediateClauseSets : Boolean = false,
+                       dumpIntermediateClauses : Boolean = false,
+                       dumpSimplifiedClauses   : Boolean = false,
                        fileName : String = "",
                        templateBasedInterpolationPortfolio : Boolean = false,
                        templateBasedInterpolation : Boolean = true,
@@ -211,26 +212,35 @@ class VerificationLoop(system : ParametricEncoder.System,
       ////////////////////////////////////////////////////////////////////////////
 
       val printAndExit =
-        printIntermediateClauseSets ||
+        dumpIntermediateClauses || dumpSimplifiedClauses
         lazabs.GlobalParameters.get.printHornSimplified ||
         lazabs.GlobalParameters.get.printHornSimplifiedSMT
 
       if (printAndExit) {
-        if (printIntermediateClauseSets) {
+        if (dumpIntermediateClauses || dumpSimplifiedClauses) {
           println
           println("Writing Horn clauses to " + fileName)
 
           val out = new java.io.FileOutputStream(fileName)
+
+          val allClauses = if (dumpSimplifiedClauses) {
+            val preprocessor = new DefaultPreprocessor
+            val (simpClauses, _, _) =
+              Console.withErr(Console.out){
+                preprocessor.process(encoder.allClauses, encoder.globalHints)
+              }
+            simpClauses
+          } else encoder.allClauses
+
           Console.withOut(out){
             val clauseFors =
-              for (c <- encoder.allClauses) yield {
+              for (c <- allClauses) yield {
                 val f = c.normalize.toFormula
                 // eliminate remaining operators like eps
                 Transform2Prenex(EquivExpander(PartialEvaluator(f)))
               }
 
-            val allPredicates =
-              HornClauses allPredicates encoder.allClauses
+            val allPredicates = HornClauses allPredicates allClauses
 
             SMTLineariser("C_VC", "HORN", expectedStatus,
                           List(), allPredicates.toSeq.sortBy(_.name),
