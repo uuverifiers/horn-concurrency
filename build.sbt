@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "2.1",
+  version := "2.1.1",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.18"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
