@@ -242,9 +242,11 @@ class VerificationLoop(system : ParametricEncoder.System,
 
             val allPredicates = HornClauses allPredicates allClauses
 
-            SMTLineariser("C_VC", "HORN", expectedStatus,
-                          List(), allPredicates.toSeq.sortBy(_.name),
-                          clauseFors)
+            SMTLineariser.printWithDecls(benchmarkName  = "C_VC",
+                                         logic          = "HORN",
+                                         predsToDeclare =
+                                           allPredicates.toSeq.sortBy(_.name),
+                                         formulas       = clauseFors)
           }
           out.close
         }
@@ -266,8 +268,10 @@ class VerificationLoop(system : ParametricEncoder.System,
                 c.predicates
               }).flatten.toSet.toList
 
-            SMTLineariser("", "HORN", "", Nil, predsToDeclare,
-                          simpClauses.map(_ toFormula))
+            SMTLineariser.printWithDecls(benchmarkName  = "C_VC",
+                                         logic          = "HORN",
+                                         predsToDeclare = predsToDeclare,
+                                         formulas       = simpClauses.map(_ toFormula))
           }
         }
         res = Left(None) // return dummy result

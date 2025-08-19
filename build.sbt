@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "2.1.1",
+  version := "2.2",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.18"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
@@ -20,8 +20,8 @@ lazy val commonSettings = Seq(
     Developer(
       id    = "zafer.esen",
       name  = "Zafer Esen",
-      email = "zafer.esen@it.uu.se",
-      url   = url("https://katalog.uu.se/empinfo/?id=N18-2424")
+      email = "zafer.esen@gmail.com",
+      url   = url("https://zafer-esen.github.io/")
     )
   ),
   publishTo := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )))
@@ -34,7 +34,6 @@ assembly / test := {}
 lazy val root = (project in file(".")).
   settings(commonSettings: _*).
 
-//
 settings(
   Compile / scalacOptions ++=
     List("-feature",
@@ -45,6 +44,6 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.1" exclude(
+  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
