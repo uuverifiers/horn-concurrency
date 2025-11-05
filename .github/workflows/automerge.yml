@@ -9,11 +9,14 @@ on:
 jobs:
   merge:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ["scala-2.13"] # more branches can be added here: ["scala-2.13", "scala-3"]
     steps:
-      - name: checkout scala-2.13 branch
+      - name: checkout master
         uses: actions/checkout@v4
         with:
-          ref: scala-2.13
+          ref: master
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -22,10 +25,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: fetch and merge master
+      - name: merge master into ${{ matrix.branch }}
+        shell: bash
         run: |
-          git fetch origin master
-          git merge origin/master --no-edit || exit 1
+          BRANCH="${{ matrix.branch }}"
+          echo "=== Merging master into $BRANCH ==="
+          
+          git fetch origin "$BRANCH"
 
-      - name: push changes
-        run: git push origin scala-2.13
+          if git show-ref --quiet refs/heads/"$BRANCH"; then
+            git checkout "$BRANCH"
+          else
+            git checkout -b "$BRANCH" "origin/$BRANCH"
+          fi
+
+          git merge origin/master --no-edit || { echo "Merge failed for $BRANCH"; exit 1; }
+          git push origin "$BRANCH"
+
