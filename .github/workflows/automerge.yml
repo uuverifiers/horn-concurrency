@@ -1,0 +1,31 @@
+name: automerge
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch: # for manual trigger
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout scala-2.13 branch
+        uses: actions/checkout@v4
+        with:
+          ref: scala-2.13
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: fetch and merge master
+        run: |
+          git fetch origin master
+          git merge origin/master --no-edit || exit 1
+
+      - name: push changes
+        run: git push origin scala-2.13
