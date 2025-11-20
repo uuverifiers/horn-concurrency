@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "2.2",
+  version := "2.2.1",
   scalaVersion := "2.13.17",
   crossScalaVersions := Seq("2.13.17"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
@@ -43,6 +43,6 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "uuverifiers" %% "eldarica" % "2.2" exclude(
+  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1" exclude(
     "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
 )
