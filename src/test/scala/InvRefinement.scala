@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2022-2026 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2026 Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,9 +32,10 @@ package hornconcurrency
 import org.scalatest._
 
 import ap.parser._
+import lazabs.horn.Util
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
-class BackgroundAxiomsTests extends FlatSpec {
+class InvRefinement extends FlatSpec {
   import HornClauses._
   import IExpression._
   import ParametricEncoder._
@@ -42,64 +43,74 @@ class BackgroundAxiomsTests extends FlatSpec {
 
   ap.util.Debug enableAllAssertions true
 
-  "Background Axioms test 1" should "be SOLVABLE" in {
+  val p = for (i <- 0 until 3) yield (new Predicate("p" + i, 2))
+  val q = for (i <- 0 until 3) yield (new Predicate("q" + i, 2))
+  val r = for (i <- 0 until 3) yield (new Predicate("r" + i, 2))
 
-    val p = new Predicate("p", 1)
-    val q = new Predicate("q", 1)
-    val x = new ConstantTerm("x")
+  val x = new ConstantTerm("x")
+  val y = new ConstantTerm("y")
 
-    val axioms = List(
-      p(0)   :- true,
-      p(x+1) :- p(x),
-      false  :- (p(x), x < -10)
+  val pProc = List(
+    (p(0)(0, 0) :- true,
+      NoSync),
+    (p(0)(x + 1, y) :- p(0)(x, y),
+      NoSync)
+  )
+
+  val qProc = List(
+    (q(0)(0, 0) :- true,
+      NoSync),
+    (q(0)(x, y + 1) :- q(0)(x, y),
+      NoSync)
+  )
+
+  val rProc = List(
+    (r(0)(x, y) :- true,
+      NoSync),
+    (r(1)(x + 1, y + 1) :- r(0)(x, y),
+      NoSync),
+    (r(0)(x - 1, y - 1) :- r(1)(x, y),
+      NoSync)
+  )
+
+  "System 1 with overlapping invariants" should "be solvable" in {
+    val assertions = List(
+      (x >= 0) :- p(0)(x, y),
+      (y >= 0) :- p(0)(x, y)
     )
-
-    val qProc = List(
-      (q(0)   :- true, NoSync),
-      (q(x+1) :- q(x), NoSync)
-    )
-
-    val assertions =
-      List((x >= -5) :- q(x))
 
     val system =
-      System(List((qProc, Singleton)),
-             0, None, NoTime, List(), assertions,
-             backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
+      System(
+        List((pProc, Singleton), (qProc, Singleton), (rProc, Singleton)),
+        2,
+        None,
+        NoTime,
+        List(),
+        assertions)
 
-    val vl = runLoop(system)
-
+    val vl =
+      runLoop(system,
+              initialInvariants = List(List(1, 0, 1), List(0, 1, 1)))
     assert(isSolvable(vl))
   }
-  
-  "Background Axioms test 2" should "be NOT SOLVABLE" in {
 
-    val p = new Predicate("p", 1)
-    val q = new Predicate("q", 1)
-    val x = new ConstantTerm("x")
-
-    val axioms = List(
-      p(0)   :- true,
-      p(x+1) :- p(x),
-      false  :- (p(x), x > 10)
+  "System 2 with overlapping invariants" should "be not solvable" in {
+    val assertions = List(
+      (x >= y) :- p(0)(x, y)
     )
-
-    val qProc = List(
-      (q(0)   :- true, NoSync),
-      (q(x+1) :- q(x), NoSync)
-    )
-
-    val assertions =
-      List((x >= -5) :- q(x))
 
     val system =
-      System(List((qProc, Singleton)),
-             0, None, NoTime, List(), assertions,
-             backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
+      System(
+        List((pProc, Singleton), (qProc, Singleton), (rProc, Singleton)),
+        2,
+        None,
+        NoTime,
+        List(),
+        assertions)
 
-    val vl = runLoop(system)
-
+    val vl =
+      runLoop(system,
+              initialInvariants = List(List(1, 0, 1), List(0, 1, 1)))
     assert(!isSolvable(vl))
   }
-  
 }

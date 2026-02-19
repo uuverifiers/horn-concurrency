@@ -2,8 +2,8 @@ lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
   version := "2.2.1",
-  scalaVersion := "2.13.17",
-  crossScalaVersions := Seq("2.13.17"),
+  scalaVersion := "2.13.18",
+  crossScalaVersions := Seq("2.13.18"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
   homepage := Some(url("https://github.com/uuverifiers/horn-concurrency")),
   licenses := Seq("BSD License 2.0" -> url("https://github.com/uuverifiers/eldarica/blob/master/LICENSE")),
@@ -39,10 +39,10 @@ settings(
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
   scalacOptions += (scalaVersion map { sv => sv match {
-                                        case "2.13.17" => "-opt:_"
+                                        case "2.13.18" => "-opt:_"
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1" exclude(
-    "net.sf.squirrel-sql.thirdparty-non-maven","java-cup")
+  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1"
+//  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT"
 )
