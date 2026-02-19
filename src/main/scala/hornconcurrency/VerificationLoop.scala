@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2024 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2026 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -726,12 +726,19 @@ class VerificationLoop(system : ParametricEncoder.System,
                     } sortBy (_.sum)
                     assert(relevantInvs.size >= 2)
 
-                    val newInv = for ((a, b) <- relevantInvs(0) zip relevantInvs(1))
-                      yield (a + b)
+                    val newInv =
+                      for (((a, b), i) <- (relevantInvs(0) zip relevantInvs(1)).zipWithIndex)
+                      yield {
+                        if (system.processes(i)._2 == Infinite)
+                          (a + b)
+                        else
+                          (a + b) min 1
+                      }
 
-                    List(newInv) ++ (for (inv <- invariants;
-                                          if (inv != relevantInvs(0) && inv != relevantInvs(1)))
-                      yield inv)
+                    List(newInv) ++
+                    (for (inv <- invariants;
+                          if (inv != relevantInvs(0) && inv != relevantInvs(1)))
+                     yield inv)
                   }
                   case invIndex =>
                     // increase arity of this invariant

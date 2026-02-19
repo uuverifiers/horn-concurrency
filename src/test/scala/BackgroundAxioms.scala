@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2022-2024 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2022-2026 Philipp Ruemmer. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,8 +27,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+package hornconcurrency
+
 import org.scalatest._
-import hornconcurrency._
 
 import ap.parser._
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
@@ -37,14 +38,9 @@ class BackgroundAxiomsTests extends FlatSpec {
   import HornClauses._
   import IExpression._
   import ParametricEncoder._
+  import VerificationUtils._
 
   ap.util.Debug enableAllAssertions true
-
-  def isSolvable(vl : VerificationLoop) : Boolean =
-    vl.result match {
-      case Right(_) => false // not solveable
-      case Left(_) => true // solveable
-    }
 
   "Background Axioms test 1" should "be SOLVABLE" in {
 
@@ -71,7 +67,7 @@ class BackgroundAxiomsTests extends FlatSpec {
              0, None, NoTime, List(), assertions,
              backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
 
-    val vl = new VerificationLoop(system, log = true)
+    val vl = runLoop(system)
 
     assert(isSolvable(vl))
   }
@@ -101,7 +97,7 @@ class BackgroundAxiomsTests extends FlatSpec {
              0, None, NoTime, List(), assertions,
              backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
 
-    val vl = new VerificationLoop(system, log = true)
+    val vl = runLoop(system)
 
     assert(!isSolvable(vl))
   }

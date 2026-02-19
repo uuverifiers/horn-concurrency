@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2020 Philipp Ruemmer, Zafer Esen. All rights reserved.
+ * Copyright (c) 2011-2026 Philipp Ruemmer, Zafer Esen. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,36 +27,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+package hornconcurrency
+
 import org.scalatest._
-import hornconcurrency._
 
 import ap.parser._
 import lazabs.horn.Util
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
-class VerificationLoopTests extends FlatSpec {
-  import HornClauses._
-  import IExpression._
-  import ParametricEncoder._
+object VerificationUtils {
+  def noOutput[A](comp : => A) : A =
+    Console.withOut(lazabs.horn.Util.NullStream) {
+      Console.withErr(lazabs.horn.Util.NullStream) {
+        comp
+    }}
 
-  ap.util.Debug enableAllAssertions true
+  def runLoop(system : ParametricEncoder.System,
+              initialInvariants : Seq[Seq[Int]] = null) =
+    noOutput(
+      new VerificationLoop(system, initialInvariants)
+    )
 
   def solve(enc : ParametricEncoder) : Boolean = {
-    println("Solving ...")
+//    println("Solving ...")
 
-    val predAbs =
-      new HornPredAbs(enc.allClauses)
+    val predAbsResult = noOutput {
+      val predAbs = new HornPredAbs(enc.allClauses)
+      predAbs.result
+    }
 
-    println
-    predAbs.result match {
+//    println
+    predAbsResult match {
       case Right(cex) => {
-        println("NOT SOLVABLE")
-        Util.show(for (p <- cex) yield p._1, "horn-cex")
-        cex.prettyPrint
+        //println("NOT SOLVABLE")
+        //Util.show(for (p <- cex) yield p._1, "horn-cex")
+        //cex.prettyPrint
         false
       }
       case Left(solution) =>
-        println("SOLVABLE: " + solution)
+        //println("SOLVABLE: " + solution)
         true
     }
   }
@@ -66,6 +75,15 @@ class VerificationLoopTests extends FlatSpec {
       case Right(_) => false // not solveable
       case Left(_) => true // solveable
     }
+}
+
+class VerificationLoopTests extends FlatSpec {
+  import HornClauses._
+  import IExpression._
+  import ParametricEncoder._
+  import VerificationUtils._
+
+  ap.util.Debug enableAllAssertions true
 
   //////////////////////////////////////////////////////////////////////////////
   "Broadcast channel test (encoded using barriers)" should "be NOT SOLVABLE" in {
@@ -110,7 +128,7 @@ class VerificationLoopTests extends FlatSpec {
                   (qProc, Singleton)),
              0, None, NoTime, List(), assertions)
 
-    val vl = new VerificationLoop(system, log = false)
+    val vl = runLoop(system)
 
     assert(!isSolvable(vl))
   }
@@ -293,7 +311,7 @@ class VerificationLoopTests extends FlatSpec {
                   (Controller, Singleton)),
              2, None, DiscreteTime(0), timeInvs, assertions)
 
-    val vl = new VerificationLoop(system)
+    val vl = runLoop(system)
     assert(!isSolvable(vl))
   }
 
@@ -375,7 +393,7 @@ class VerificationLoopTests extends FlatSpec {
                   (cProcess, Singleton)),
              3, None, NoTime, List(), assertions)
 
-    val vl = new VerificationLoop(system)
+    val vl = runLoop(system)
     assert(isSolvable(vl))
   }
 
@@ -423,7 +441,7 @@ class VerificationLoopTests extends FlatSpec {
     val system =
       System(List((counterProcess, Infinite)), 1, None, NoTime, List(), assertions)
 
-    val vl = new VerificationLoop(system)
+    val vl = runLoop(system)
     assert(isSolvable(vl))
   }
 
@@ -532,7 +550,7 @@ class VerificationLoopTests extends FlatSpec {
         timeInvs,
         assertions)
 
-    val vl = new VerificationLoop(system)
+    val vl = runLoop(system)
 
 /*  val enc =
     new ParametricEncoder(system, assertions, List(List(1, 2)))
@@ -680,7 +698,7 @@ false :- p(A,D,E,B,C,F),(D > 1).
     //    List(false :- (train(1)(c, id1, x1),
     //                   gate(1)(c, n, y)))
 
-    val vl = new VerificationLoop(system)
+    val vl = runLoop(system)
     assert(isSolvable(vl))
   }
 
@@ -712,7 +730,7 @@ false :- p(A,D,E,B,C,F),(D > 1).
 
     val assertion = false :- (p(A,D,E,B,C,F), D > 1)
 
-    val vl = new VerificationLoop(System(
+    val vl = runLoop(System(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
@@ -768,7 +786,7 @@ false :- p(A,D,E,B,C,F),(D > 1).
 
     val assertion = false :- (p4(A,D,E,B,C,F) & D > 1)
 
-    val vl = new VerificationLoop(System(
+    val vl = runLoop(System(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
@@ -827,7 +845,7 @@ false :- p(A,D,E,B,C,F),(D > 1).
 
     val assertion = (D <= 1) :- p4(A,D,E,delay1,delay2,B,C,F)
 
-    val vl = new VerificationLoop(System(
+    val vl = runLoop(System(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
@@ -888,8 +906,8 @@ false :- p(A,D,E,B,C,F),(D > 1).
     }
 
     for (N <- List(2, 3, 4)) {
-      println
-      println("Fischer " + N)
+//      println
+//      println("Fischer " + N)
 
       val (processes, timeInvs, critical) = (for (i <- 1 to N) yield genFischerProcess(i)).toList.unzip3
 
@@ -897,7 +915,7 @@ false :- p(A,D,E,B,C,F),(D > 1).
         (for (List(p, q) <- critical.toList combinations 2)
          yield (false :- (p(A,D,E,C,F) & q(A,D,E,C,F)))).toList
 
-      val vl = new VerificationLoop(System(for (p <- processes) yield (p, Singleton),
+      val vl = runLoop(System(for (p <- processes) yield (p, Singleton),
                                   3, None,
                                   DiscreteTime(0),
                                   timeInvs.flatten,
