@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2022 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2026 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,6 +31,7 @@ package hornconcurrency
 
 import ap.parser._
 import ap.types.MonoSortedPredicate
+import ap.theories.rationals.Rationals
 import ap.util.{Seqs, Combinatorics}
 
 import lazabs.horn.Util
@@ -54,6 +55,7 @@ object ParametricEncoder {
   case object NoTime                                           extends TimeSpec
   case class  DiscreteTime(index : Int)                        extends TimeSpec
   case class  ContinuousTime(numIndex : Int, denomIndex : Int) extends TimeSpec
+  case class  RationalTime(index : Int)                        extends TimeSpec
 
   type Process = Seq[(HornClauses.Clause, Synchronisation)]
   type ProcessSet = Seq[(Process, Replication)]
@@ -1289,15 +1291,16 @@ class ParametricEncoder(system : ParametricEncoder.System,
   val timeElapseTransitions = timeSpec match {
     case NoTime => List() // no time
     case _ => {
-      val index = timeSpec match {
-        case DiscreteTime(index) => index
-        case ContinuousTime(index, _) => index
-        case _ => assert(false); 0
+      val (index, timeSort) = timeSpec match {
+        case DiscreteTime(index)      => (index, Sort.Integer)
+        case ContinuousTime(index, _) => (index, Sort.Integer)
+        case RationalTime(index)      => (index, Rationals.dom)
+        case _ => throw new Exception("cannot handle time " + timeSpec)
       }
 
       (for ((localPreds, globalPred) <- globalPredsSeq.iterator) yield {
          val preGlobalParams = freshGlobalParams
-         val newTime = i(new ConstantTerm ("NewTime"))
+         val newTime = i(timeSort.newConstant("NewTime"))
          val postGlobalParams = preGlobalParams.updated(index, newTime)
          val localParams = freshParams(localPreds)
          
@@ -1309,9 +1312,15 @@ class ParametricEncoder(system : ParametricEncoder.System,
                  ~negInv & (params === (postGlobalParams ++ qParams))
                })
 
+         val timeIncreasing =
+          if (timeSort == Sort.Integer)
+            newTime >= preGlobalParams(index)
+          else
+            Rationals.geq(newTime, preGlobalParams(index))
+
          Clause(invPred(postGlobalParams, localParams),
                 List(invPred(preGlobalParams, localParams)),
-                (newTime >= preGlobalParams(index)) &&& timeConstraints &&&
+                timeIncreasing &&& timeConstraints &&&
                 distinctIds(localParams) &&&
                 allAxioms(preGlobalParams))
        }).toList

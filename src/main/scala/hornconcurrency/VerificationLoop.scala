@@ -32,6 +32,9 @@ package hornconcurrency
 import ap.parser._
 import ap.SimpleAPI
 import ap.SimpleAPI.ProverStatus
+import ap.theories.rationals.Rationals
+import ap.basetypes.IdealInt
+
 import lazabs.{GlobalParameters, ParallelComputation}
 import lazabs.horn.{Util, HornWrapper}
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
@@ -180,6 +183,7 @@ class VerificationLoop(system : ParametricEncoder.System,
   import VerificationLoop._
   import ParametricEncoder._
   import HornClauses.{Clause, FALSE}
+  import Rationals.Fraction
   import Util._
 
   val result : Either[Option[HornPreprocessor.Solution], Counterexample] = {
@@ -642,6 +646,7 @@ class VerificationLoop(system : ParametricEncoder.System,
                       for (_ <-
                              encoder.timeElapseTransitions find (_ == clause)) yield {
 
+                        import IExpression._
                         val oldGlobal = currentStates(0).args take globalVarNum
                         val newGlobal = localAtoms.head.args take globalVarNum
                         val delay = system.timeSpec match {
@@ -656,6 +661,15 @@ class VerificationLoop(system : ParametricEncoder.System,
                             (newGlobal(num).asInstanceOf[IIntLit].value.intValueSafe -
                               oldGlobal(num).asInstanceOf[IIntLit].value.intValueSafe,
                               oldGlobal(denom).asInstanceOf[IIntLit].value.intValueSafe)
+                          case RationalTime(index) => {
+                            val Fraction(Const(oldNum), Const(oldDenom)) = oldGlobal(index)
+                            val Fraction(Const(newNum), Const(newDenom)) = newGlobal(index)
+                            val resNum = (newNum * oldDenom) - (oldNum * newDenom)
+                            val resDenom = oldDenom * newDenom
+                            assert(resDenom.signum > 0)
+                            val g = IdealInt.gcd(List(resNum, resDenom))
+                            ((resNum / g).intValueSafe, (resDenom / g).intValueSafe)
+                          }
                         }
 
                         updateGlobalVars(newGlobal)
