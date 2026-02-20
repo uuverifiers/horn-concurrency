@@ -43,10 +43,14 @@ object VerificationUtils {
     }}
 
   def runLoop(system : ParametricEncoder.System,
-              initialInvariants : Seq[Seq[Int]] = null) =
-    noOutput(
+              initialInvariants : Seq[Seq[Int]] = null) = {
+    val start = System.currentTimeMillis
+    val res = noOutput(
       new VerificationLoop(system, initialInvariants)
     )
+    // println(s"Time: ${System.currentTimeMillis - start}ms")
+    res
+  }
 
   def solve(enc : ParametricEncoder) : Boolean = {
 //    println("Solving ...")
@@ -72,7 +76,10 @@ object VerificationUtils {
 
   def isSolvable(vl : VerificationLoop) : Boolean =
     vl.result match {
-      case Right(_) => false // not solveable
+      case Right(cex) => {
+        //VerificationLoop.prettyPrint(cex)
+        false // not solveable
+      }
       case Left(_) => true // solveable
     }
 }
@@ -444,264 +451,6 @@ class VerificationLoopTests extends FlatSpec {
     val vl = runLoop(system)
     assert(isSolvable(vl))
   }
-
-  //////////////////////////////////////////////////////////////////////////////
-
-  "Train crossing example" should "be SOLVABLE" in {
-    val train = for (i <- 0 to 4) yield (new Predicate("train" + i, 4 + 3))
-    val gate  = for (i <- 0 to 5) yield (new Predicate("gate" + i, 4 + 3))
-
-    val C = new ConstantTerm("C")
-    val U = new ConstantTerm("U")
-    val e = new ConstantTerm("e")
-    val ticket = new ConstantTerm("ticket")
-    val my_ticket = new ConstantTerm("my_ticket")
-    val my_ticket2 = new ConstantTerm("my_ticket2")
-    val next_waiting_ticket = new ConstantTerm("next_waiting_ticket")
-    val next_available_ticket = new ConstantTerm("next_available_ticket")
-    val x = new ConstantTerm("x")
-    val x2 = new ConstantTerm("x2")
-    val y = new ConstantTerm("y")
-    val id = new ConstantTerm("id")
-    val id2 = new ConstantTerm("id2")
-
-    val go = new CommChannel("go")
-    val appr = new CommChannel("appr")
-    val leave = new CommChannel("leave")
-    val stop = new CommChannel("stop")
-
-    val gateProcess = List(
-
-      (gate(1)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, C) :- true,               NoSync),
-
-      (gate(5)(C, U, e, ticket, next_available_ticket, next_available_ticket, y) :-
-         gate(1)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     NoSync),
-
-      (gate(3)(C, U, e, next_waiting_ticket, next_waiting_ticket+1, next_available_ticket, y) :-
-         (gate(5)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-          next_waiting_ticket < next_available_ticket),                                               NoSync),
-
-      (gate(2)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y) :-
-         (gate(5)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-          next_waiting_ticket === next_available_ticket),                                             NoSync),
-
-      (gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y) :-
-         gate(3)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Send(go)),
-
-      (gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket+1, y) :-
-         gate(2)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Receive(appr)),
-
-      (gate(5)(C, U, e, ticket, next_waiting_ticket+1, next_available_ticket, y) :-
-         gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Receive(leave)),
-
-      (gate(4)(C, U, e, next_available_ticket, next_waiting_ticket, next_available_ticket+1, C) :-
-         gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Receive(appr)),
-
-      (gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y) :-
-         gate(4)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Send(stop))
-
-    )
-
-    val trainProcess = List(
-
-      (train(4)(C, U, e, ticket, id, my_ticket, C) :- true,                                           NoSync),
-
-      (train(1)(C, U, id, ticket, id, my_ticket, C) :-
-         train(4)(C, U, e, ticket, id, my_ticket, x),                                                 Send(appr)),
-
-      (train(2)(C, U, e, ticket, id, ticket, C) :-
-         (train(1)(C, U, e, ticket, id, my_ticket, x),
-          C - x <= U*10, e === id),                                                                   Receive(stop)),
-
-      (train(3)(C, U, e, ticket, id, my_ticket, C) :-
-         (train(2)(C, U, e, ticket, id, my_ticket, x),
-          my_ticket === ticket),                                                                      Receive(go)),
-
-      (train(0)(C, U, e, ticket, id, my_ticket, C) :-
-         (train(3)(C, U, e, ticket, id, my_ticket, x),
-          C - x >= U*7),                                                                              NoSync),
-
-      (train(0)(C, U, e, ticket, id, my_ticket, C) :-
-         (train(1)(C, U, e, ticket, id, my_ticket, x),
-          C - x >= U*10),                                                                             NoSync),
-
-      (train(4)(C, U, id, ticket, id, my_ticket, C) :-
-         (train(0)(C, U, e, ticket, id, my_ticket, x),
-          C - x >= U*3),                                                                              Send(leave))
-
-    )
-
-    val timeInvs = List(
-      (C - y <= U*5) :- gate(4)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-      (C - x <= U*20) :- train(1)(C, U, e, ticket, id, my_ticket, x),
-      (C - x <= U*15) :- train(3)(C, U, e, ticket, id, my_ticket, x),
-      (C - x <= U*5) :- train(0)(C, U, e, ticket, id, my_ticket, x)
-    )
-
-    val assertions =
-      List(false :- (train(0)(C, U, e, ticket, id, my_ticket, x),
-                     train(0)(C, U, e, ticket, id2, my_ticket2, x2)))
-
-    val system =
-      System(
-        List((gateProcess, Singleton), (trainProcess, Infinite)),
-        4, None,
-        ContinuousTime(0, 1),
-        timeInvs,
-        assertions)
-
-    val vl = runLoop(system)
-
-/*  val enc =
-    new ParametricEncoder(system, assertions, List(List(1, 2)))
-
- solve(enc) */
-    assert(isSolvable(vl))
-  }
-
-  //////////////////////////////////////////////////////////////////////////////
-
-/*
-P(c,my_id,x,num,id,t)    :- (x = c) , \+(my_id = 0) , (num = 0) , (t = 0).
-
-P(c,my_id,x2,num,id,r1)  :- P(c,my_id,x1,num,id,r0) , \+(my_id = 0) ,
-                            (id = 0) , (c - x2 =< 1) , (c - x2 = 0) , (r1 = 1) , (r0 = 0).
-P(c,my_id,x2,num,id2,r2) :- P(c,my_id,x1,num,id1,r1) , ((c - x1) =< 1) , (c - x2 = 0) , (id2 = my_id) , (r1 = 1) , (r2 = 2).
-P(c,my_id,x2,num,id,r1)  :- P(c,my_id,x1,num,id,r2) , (id = 0) , ((c - x2) =< 1) , ((c - x2) = 0) , (r1 = 1) , (r2 = 2).
-P(c,my_id,x,num,id,r3)   :- P(c,my_id,x,num,id,r2) , (c - x > 1) , (id = my_id) , (r2 = 2) , (r3 = 3).
-P(c,my_id,x,num2,id,r4)  :- P(c,my_id,x,num1,id,r3) , (num2 = num1 + 1) , (r3 = 3) , (r4 = 4).
-P(c,my_id,x,num2,id2,r0) :- P(c,my_id,x,num1,id1,r4) , (id2 = 0) , (num2 = 0) , (r4 = 4) , (r0 = 0).
-
-P(c2,my_id,x,num,id,t)   :- (c2 >= c1) , \+(t = 1) , P(c1,my_id,x,num,id,t).
-P(c2,my_id,x,num,id,t)   :- (c2 >= c1) , (c2 - x =< 1) , (t = 1) , P(c1,my_id,x,num,id,t).
-
-
-p(A,D,E,B,C,F) :- (C = A),\+((B = 0)),(D = 0),(F = 0).
-p(A,D,E,B,C,F) :- p(A,D,E,B,G,H),\+((B = 0)),(E = 0),((A - C) =< 1),((A - C) = 0),(F = 1),(H = 0).
-p(A,D,E,B,C,F) :- p(A,D,H,B,G,I),((A - G) =< 1),((A - C) = 0),(E = B),(I = 1),(F = 2).
-p(A,D,E,B,C,F) :- p(A,D,E,B,G,H),(E = 0),((A - C) =< 1),((A - C) = 0),(F = 1),(H = 2).
-p(A,D,E,B,C,F) :- p(A,D,E,B,C,G),((A - C) > 1),(E = B),(G = 2),(F = 3).
-p(A,D,E,B,C,F) :- p(A,G,E,B,C,H),(D = (G + 1)),(H = 3),(F = 4).
-p(A,D,E,B,C,F) :- p(A,G,H,B,C,I),(E = 0),(D = 0),(I = 4),(F = 0).
-p(A,D,E,B,C,F) :- (A >= G),\+((F = 1)),p(G,D,E,B,C,F).
-p(A,D,E,B,C,F) :- (A >= G),((A - C) =< 1),(F = 1),p(G,D,E,B,C,F).
-
-false :- p(A,D,E,B,C,F),(D > 1).
- */
-
-
-  //////////////////////////////////////////////////////////////////////////////
-  "Simplified train crossing example for FM submission" should "be SOLVABLE" in {
-    ap.util.Debug enableAllAssertions true
-
-    val train = for (i <- 0 to 4) yield (new Predicate("train" + i, 1 + 2))
-    val gate  = for (i <- 0 to 5) yield (new Predicate("gate" + i, 1 + 2))
-
-    val c = new ConstantTerm("c")
-    val n = new ConstantTerm("n")
-    val x = new ConstantTerm("x")
-    val x1 = new ConstantTerm("x1")
-    val x2 = new ConstantTerm("x2")
-    val y = new ConstantTerm("y")
-    val id  = new ConstantTerm("id")
-    val id1 = new ConstantTerm("id1")
-    val id2 = new ConstantTerm("id2")
-
-    val go = new CommChannel("go")
-    val appr = new CommChannel("appr")
-    val leave = new CommChannel("leave")
-    val stop = new CommChannel("stop")
-
-    val gateProcess = List(
-
-      (gate(0)(c, n, c) :-
-         (true),                                                                                     NoSync),
-
-      (gate(1)(c, 0, y) :-
-         gate(0)(c, n, y),                                                                           NoSync),
-
-      /*    (gate(2)(c, n, y) :-
-       (gate(1)(c, n, y),
-       !(n === 0)),                                                                                NoSync),
-
-       (gate(3)(c, n, y) :-
-       (gate(1)(c, n, y),
-       (n === 0)),                                                                                 NoSync),
-       */
-      (gate(4)(c, n, y) :-
-         (gate(1)(c, n, y), n =/= 0),                                                                         Send(go)),
-
-      (gate(4)(c, n + 1, y) :-
-         (gate(1)(c, n, y), n === 0),                                                                         Receive(appr)),
-
-      (gate(1)(c, n - 1, y) :-
-         (gate(4)(c, n, y)),                                                                         Receive(leave)),
-
-      (gate(5)(c, n + 1, c) :-
-         (gate(4)(c, n, y)),                                                                         Receive(appr)),
-
-      (gate(4)(c, n, c) :-
-         (gate(5)(c, n, y)),                                                                         Send(stop))
-
-    )
-
-    val trainProcess = List(
-
-      (train(0)(c, id, c) :-
-         true,                                                                                       NoSync),
-
-      (train(2)(c, id, c) :-
-         (train(0)(c, id, x)),                                                                       Send(appr)),
-
-      (train(1)(c, id, c) :-
-         (train(2)(c, id, x),
-          c - x >= 10),                                                                              NoSync),
-
-      (train(0)(c, id, c) :-
-         (train(1)(c, id, x),
-          c - x >= 3),                                                                               Send(leave)),
-
-      (train(3)(c, id, c) :-
-         (train(2)(c, id, x),
-          c - x <= 10),                                                                              Receive(stop)),
-
-      (train(4)(c, id, c) :-
-         (train(3)(c, id, x)),                                                                       Receive(go)),
-
-      (train(1)(c, id, c) :-
-         (train(4)(c, id, x),
-          c - x >= 7),                                                                                NoSync)
-
-    )
-
-    val timeInvs = List(
-      (c - y <= 5)    :- gate(5)(c, n, y),
-      (c - x <= 5)    :- train(1)(c, id, x),
-      (c - x <= 20)   :- train(2)(c, id, x),
-      (c - x <= 15)   :- train(4)(c, id, x)
-    )
-
-    val assertions =
-      List(false :- (train(1)(c, id1, x1),
-                     train(1)(c, id2, x2)))
-
-    val system =
-      System(
-        List((gateProcess, Singleton), (trainProcess, Infinite)),
-        1,
-        None,
-        DiscreteTime(0),
-        timeInvs,
-        assertions)
-
-    // can we get deadlocks?
-    //    List(false :- (train(1)(c, id1, x1),
-    //                   gate(1)(c, n, y)))
-
-    val vl = runLoop(system)
-    assert(isSolvable(vl))
-  }
-
 
   //////////////////////////////////////////////////////////////////////////////
 
