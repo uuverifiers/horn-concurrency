@@ -37,7 +37,7 @@ object MainGPUPara extends App {
 
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   
   ap.util.Debug enableAllAssertions true
 
@@ -188,7 +188,7 @@ __global const ValueType *in,
   )
 
   val system =
-    System(List((kernel, Infinite)), 7, None, NoTime, List(), assertions)
+    System(List((kernel, Infinite)), 7, assertions)
 
   new VerificationLoop(system)
   }

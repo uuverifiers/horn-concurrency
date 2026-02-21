@@ -38,7 +38,7 @@ import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 class InvRefinement extends FlatSpec {
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   import VerificationUtils._
 
   ap.util.Debug enableAllAssertions true
@@ -83,9 +83,6 @@ class InvRefinement extends FlatSpec {
       System(
         List((pProc, Singleton), (qProc, Singleton), (rProc, Singleton)),
         2,
-        None,
-        NoTime,
-        List(),
         assertions)
 
     val vl =
@@ -103,9 +100,6 @@ class InvRefinement extends FlatSpec {
       System(
         List((pProc, Singleton), (qProc, Singleton), (rProc, Singleton)),
         2,
-        None,
-        NoTime,
-        List(),
         assertions)
 
     val vl =

@@ -40,7 +40,7 @@ import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 class RatTime extends FlatSpec {
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   import VerificationUtils._
   import Rationals.{geq, leq, gt, minus, int2ring => toRat}
 
@@ -65,12 +65,12 @@ class RatTime extends FlatSpec {
     )
 
     val system =
-      System(
+      TimedSystem(
         List((pProc, Singleton)),
-        1, None,
+        1,
+        assertions,
         RationalTime(0),
-        List(),
-        assertions)
+        List())
 
     val vl = runLoop(system)
 

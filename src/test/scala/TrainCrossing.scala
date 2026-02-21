@@ -40,7 +40,7 @@ import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 class TrainCrossing extends FlatSpec {
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   import VerificationUtils._
 
   ap.util.Debug enableAllAssertions true
@@ -141,12 +141,12 @@ class TrainCrossing extends FlatSpec {
                      train(0)(C, U, e, ticket, id2, my_ticket2, x2)))
 
     val system =
-      System(
+      TimedSystem(
         List((gateProcess, Singleton), (trainProcess, Infinite)),
-        4, None,
+        4,
+        assertions,
         ContinuousTime(0, 1),
-        timeInvs,
-        assertions)
+        timeInvs)
 
     val vl = runLoop(system)
 
@@ -254,13 +254,12 @@ class TrainCrossing extends FlatSpec {
                      train(1)(c, id2, x2)))
 
     val system =
-      System(
+      TimedSystem(
         List((gateProcess, Singleton), (trainProcess, Infinite)),
         1,
-        None,
+        assertions,
         DiscreteTime(0),
-        timeInvs,
-        assertions)
+        timeInvs)
 
     // can we get deadlocks?
     //    List(false :- (train(1)(c, id1, x1),
@@ -371,12 +370,12 @@ class TrainCrossing extends FlatSpec {
                      train(0)(C, e, ticket, id2, my_ticket2, x2)))
 
     val system =
-      System(
+      TimedSystem(
         List((gateProcess, Singleton), (trainProcess, Infinite)),
-        3, None,
+        3,
+        assertions,
         RationalTime(0),
-        timeInvs,
-        assertions)
+        timeInvs)
 
     val vl = runLoop(system)
 

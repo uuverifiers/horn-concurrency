@@ -50,7 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 object VerificationLoop {
 
   import HornClauses.Clause
-  import ParametricEncoder._
+  import System._
 
   abstract sealed class CEXStep(val newStates : Seq[IAtom])
   case class CEXInit     (_newStates : Seq[IAtom],
@@ -162,7 +162,7 @@ object VerificationLoop {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class VerificationLoop(system : ParametricEncoder.System,
+class VerificationLoop(system : System,
                        initialInvariants : Seq[Seq[Int]] = null,
                        dumpIntermediateClauses : Boolean = false,
                        dumpSimplifiedClauses   : Boolean = false,
@@ -181,7 +181,7 @@ class VerificationLoop(system : ParametricEncoder.System,
                        logSymbolicExecution : Boolean = false)
 {
   import VerificationLoop._
-  import ParametricEncoder._
+  import System._
   import HornClauses.{Clause, FALSE}
   import Rationals.Fraction
   import Util._
@@ -377,7 +377,7 @@ class VerificationLoop(system : ParametricEncoder.System,
 
             val fullCEXWithOriginalInvs = {
               if (system.processes.size > 1 ||
-                  system.processes.head._2 == ParametricEncoder.Infinite)
+                  system.processes.head._2 == Infinite)
                 fullCEX
               else updateInvs(fullCEX)
             }
@@ -649,11 +649,7 @@ class VerificationLoop(system : ParametricEncoder.System,
                         import IExpression._
                         val oldGlobal = currentStates(0).args take globalVarNum
                         val newGlobal = localAtoms.head.args take globalVarNum
-                        val delay = system.timeSpec match {
-                          case NoTime => {
-                            assert(false)
-                            (-1, 1)
-                          }
+                        val delay = system.asInstanceOf[TimedSystem].timeSpec match {
                           case DiscreteTime(index) =>
                             (newGlobal(index).asInstanceOf[IIntLit].value.intValueSafe -
                               oldGlobal(index).asInstanceOf[IIntLit].value.intValueSafe, 1)

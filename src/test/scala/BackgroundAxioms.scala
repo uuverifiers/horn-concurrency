@@ -37,7 +37,7 @@ import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 class BackgroundAxiomsTests extends FlatSpec {
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   import VerificationUtils._
 
   ap.util.Debug enableAllAssertions true
@@ -64,8 +64,8 @@ class BackgroundAxiomsTests extends FlatSpec {
 
     val system =
       System(List((qProc, Singleton)),
-             0, None, NoTime, List(), assertions,
-             backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
+             0, assertions,
+             _backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
 
     val vl = runLoop(system)
 
@@ -94,8 +94,8 @@ class BackgroundAxiomsTests extends FlatSpec {
 
     val system =
       System(List((qProc, Singleton)),
-             0, None, NoTime, List(), assertions,
-             backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
+             0, assertions,
+             _backgroundAxioms = SomeBackgroundAxioms(List(p), axioms))
 
     val vl = runLoop(system)
 

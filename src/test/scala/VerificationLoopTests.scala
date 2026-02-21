@@ -42,13 +42,13 @@ object VerificationUtils {
         comp
     }}
 
-  def runLoop(system : ParametricEncoder.System,
+  def runLoop(system : System,
               initialInvariants : Seq[Seq[Int]] = null) = {
-    val start = System.currentTimeMillis
+    val start = java.lang.System.currentTimeMillis
     val res = noOutput(
       new VerificationLoop(system, initialInvariants)
     )
-    // println(s"Time: ${System.currentTimeMillis - start}ms")
+    // println(s"Time: ${java.lang.System.currentTimeMillis - start}ms")
     res
   }
 
@@ -87,7 +87,7 @@ object VerificationUtils {
 class VerificationLoopTests extends FlatSpec {
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   import VerificationUtils._
 
   ap.util.Debug enableAllAssertions true
@@ -133,7 +133,7 @@ class VerificationLoopTests extends FlatSpec {
     val system =
       System(List((pProc, Infinite),
                   (qProc, Singleton)),
-             0, None, NoTime, List(), assertions)
+             0, assertions)
 
     val vl = runLoop(system)
 
@@ -313,10 +313,10 @@ class VerificationLoopTests extends FlatSpec {
              C - th === 900, C - t1 < 3600, C - t2 < 3600))
 
     val system =
-      System(List((Rod1, Singleton),
-                  (Rod2, Singleton),
-                  (Controller, Singleton)),
-             2, None, DiscreteTime(0), timeInvs, assertions)
+      TimedSystem(List((Rod1, Singleton),
+                       (Rod2, Singleton),
+                       (Controller, Singleton)),
+             2, assertions, DiscreteTime(0), timeInvs)
 
     val vl = runLoop(system)
     assert(!isSolvable(vl))
@@ -398,7 +398,7 @@ class VerificationLoopTests extends FlatSpec {
       System(List((aProcess, Singleton),
                   (bProcess, Singleton),
                   (cProcess, Singleton)),
-             3, None, NoTime, List(), assertions)
+             3, assertions)
 
     val vl = runLoop(system)
     assert(isSolvable(vl))
@@ -446,7 +446,7 @@ class VerificationLoopTests extends FlatSpec {
                               p(2)(lock, id2, cnt2, t2)))
 
     val system =
-      System(List((counterProcess, Infinite)), 1, None, NoTime, List(), assertions)
+      System(List((counterProcess, Infinite)), 1, assertions)
 
     val vl = runLoop(system)
     assert(isSolvable(vl))
@@ -479,14 +479,14 @@ class VerificationLoopTests extends FlatSpec {
 
     val assertion = false :- (p(A,D,E,B,C,F), D > 1)
 
-    val vl = runLoop(System(
+    val vl = runLoop(TimedSystem(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
-                           3, None,
+                           3,
+                           List(assertion),
                            DiscreteTime(0),
-                           List(timeInv),
-                           List(assertion)))
+                           List(timeInv)))
 
     /*  val enc =
      new ParametricEncoder(System(
@@ -535,14 +535,14 @@ class VerificationLoopTests extends FlatSpec {
 
     val assertion = false :- (p4(A,D,E,B,C,F) & D > 1)
 
-    val vl = runLoop(System(
+    val vl = runLoop(TimedSystem(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
-                           3, None,
+                           3,
+                           List(assertion),
                            DiscreteTime(0),
-                           List(timeInv),
-                           List(assertion)))
+                           List(timeInv)))
 
     /*
      val enc =
@@ -594,15 +594,16 @@ class VerificationLoopTests extends FlatSpec {
 
     val assertion = (D <= 1) :- p4(A,D,E,delay1,delay2,B,C,F)
 
-    val vl = runLoop(System(
+    val vl = runLoop(TimedSystem(
                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7))
                                  yield (c, NoSync),
                                  Infinite)),
-                           5, Some({ case Seq(_, _, _, delay1, delay2) =>
-                                     delay1 > 0 & delay2 >= delay1 }),
+                           5,
+                           List(assertion),
                            DiscreteTime(0),
                            List(timeInv),
-                           List(assertion)))
+                           Some({ case Seq(_, _, _, delay1, delay2) =>
+                                     delay1 > 0 & delay2 >= delay1 })))
 
     /*
      val enc =
@@ -664,11 +665,11 @@ class VerificationLoopTests extends FlatSpec {
         (for (List(p, q) <- critical.toList combinations 2)
          yield (false :- (p(A,D,E,C,F) & q(A,D,E,C,F)))).toList
 
-      val vl = runLoop(System(for (p <- processes) yield (p, Singleton),
-                                  3, None,
+      val vl = runLoop(TimedSystem(for (p <- processes) yield (p, Singleton),
+                                  3,
+                                  assertions,
                                   DiscreteTime(0),
-                                  timeInvs.flatten,
-                                  assertions))
+                                  timeInvs.flatten))
 
       assert(isSolvable(vl))
 
@@ -700,7 +701,7 @@ class VerificationLoopTests extends FlatSpec {
     val p2 = new Predicate("p2", 5)
 
     val enc =
-      new ParametricEncoder(System(
+      new ParametricEncoder(TimedSystem(
                               List((
                                      List((p0(C, 0, 0, 0, id) :- true,                         NoSync),
                                           (p1(C, n+1, 1, rec, id) :- p0(C, n, 0, rec, id),     Send(c)),
@@ -708,12 +709,11 @@ class VerificationLoopTests extends FlatSpec {
                                           (p0(C, n-1, 0, rec, id) :- p1(C, n, snt, rec, id),   NoSync),
                                           (p0(C, n-1, snt, 0, id) :- p2(C, n, snt, rec, id),   NoSync)),
                                      Infinite)),
-                              4, None,
-                              DiscreteTime(0),
-                              List(),
+                              4,
                               List(false :- (p0(C, n, snt, rec, id), n > 2),
                                    false :- (p1(C, n, snt, rec, id), n > 2),
-                                   false :- (p2(C, n, snt, rec, id), n > 2))),
+                                   false :- (p2(C, n, snt, rec, id), n > 2)),
+                              DiscreteTime(0)),
                             List(List(1)))
     assert(solve(enc))
   }

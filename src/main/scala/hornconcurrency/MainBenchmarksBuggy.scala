@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2014 Pavle Subotic, 2024 Philipp Ruemmer. All rights reserved.
+ * Copyright (c) 2011-2014 Pavle Subotic, 2024-2026 Philipp Ruemmer. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -37,7 +37,7 @@ object MainBenchmarksBuggy extends App {
 
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   
   ap.util.Debug enableAllAssertions false
 
@@ -111,7 +111,7 @@ object MainBenchmarksBuggy extends App {
 
     val assertion = false :- (obs(0)(C, U, num, gid, 0) & num > 1)
 
-    val system = System(
+    val system = TimedSystem(
                             List((for (c <- List(c1, c2, c3, c4, c5, c6, c7)) // p
                                     yield (c, NoSync),
                                   Infinite)
@@ -119,9 +119,9 @@ object MainBenchmarksBuggy extends App {
                                     yield (o, NoSync),
                                   Singleton)
                                 ), 
-                            4, None,
+                            4, List(assertion),
                             ContinuousTime(0, 1),
-                            List(timeInv), List(assertion))
+                            List(timeInv))
     if (fischerFlagB)
       new VerificationLoop(system) 
   }
@@ -241,12 +241,12 @@ object MainBenchmarksBuggy extends App {
       List(false :- (sender(3)(C, U, err, gid, id, c, l1), err > 1))
 
     val system =
-    System(
+    TimedSystem(
       List(
            (senderProcess, Infinite), 
            (busProcess, Singleton)
           ),
-      4, None, ContinuousTime(0, 1), timeInvs, assertions)
+      4, assertions, ContinuousTime(0, 1), timeInvs)
 
     if (csmaFlagB)
       new VerificationLoop(system)
@@ -332,7 +332,7 @@ object MainBenchmarksBuggy extends App {
     //val assertion = false :- (p(6)(C, U, count, v1, v2, id, c,  l1) & count > 1)
     val assertion = false :- (obs(0)(C, U, count, v1, v2, 0) & count > 1)
 
-    val system = System(
+    val system = TimedSystem(
                             List((for (c <- List(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)) // p
                                     yield (c, NoSync),
                                   Infinite)
@@ -340,9 +340,9 @@ object MainBenchmarksBuggy extends App {
                                     yield (o, NoSync),
                                   Singleton)
                                 ), 
-                            5, None,
+                            5, List(assertion),
                             ContinuousTime(0, 1),
-                            timeInv, List(assertion))
+                            timeInv)
     if(lynchFlagB)
       new VerificationLoop(system) 
   }
@@ -425,15 +425,15 @@ object MainBenchmarksBuggy extends App {
     val assertion = false :- (p(6)(C, U, v1, v2, id, c) & (p(6)(C, U, v1, v2, id2, c)))
     //val assertion = false :- (obs(0)(C, U, count, v1, v2, 0) & count > 1)
 
-    val system = System(
+    val system = TimedSystem(
                             List((for (c <- List(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)) // p
                                     yield (c, NoSync),
                                   Infinite)
 
                                 ), 
-                            4, None,
+                            4, List(assertion),
                             ContinuousTime(0, 1),
-                            timeInv, List(assertion))
+                            timeInv)
     if(lynch2FlagB)
       new VerificationLoop(system) 
   }
@@ -536,11 +536,11 @@ object MainBenchmarksBuggy extends App {
                    train(0)(C, U, e, ticket, id2, my_ticket2, x2)))
 
     val system =
-      System(
+      TimedSystem(
         List((gateProcess, Singleton), (trainProcess, Infinite)),
-        4, None,
+        4, assertions,
         ContinuousTime(0, 1),
-        timeInvs, assertions)
+        timeInvs)
 
     if(trainFlagB)
       new VerificationLoop(system)
@@ -633,10 +633,10 @@ object MainBenchmarksBuggy extends App {
            C - th === 900, C - t1 < 3600, C - t2 < 3600))
 
   val system =
-    System(List((Rod1, Singleton),
+    TimedSystem(List((Rod1, Singleton),
                 (Rod2, Singleton),
                 (Controller, Singleton)),
-           2, None, DiscreteTime(0), timeInvs, assertions)
+           2, assertions, DiscreteTime(0), timeInvs)
 
   if(bipFlagB)
     new VerificationLoop(system)
@@ -807,8 +807,8 @@ object MainBenchmarksBuggy extends App {
 //             false :- node(4)(C, U, lock, N, chan, sender, origin, id, slot, c)
     )
 
-    val system = System(List((nodeProcess, Infinite)),
-                        7, None, DiscreteTime(0), timeInvs, assertions)
+    val system = TimedSystem(List((nodeProcess, Infinite)),
+                        7, assertions, DiscreteTime(0), timeInvs)
 
     if (tta2FlagB)
       new VerificationLoop(system)

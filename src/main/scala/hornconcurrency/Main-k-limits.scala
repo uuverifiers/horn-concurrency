@@ -36,7 +36,7 @@ object MainLimits extends App {
 
   import HornClauses._
   import IExpression._
-  import ParametricEncoder._
+  import System._
   
   ap.util.Debug enableAllAssertions true
 
@@ -68,7 +68,7 @@ object MainLimits extends App {
                    l(1)(sem, id4)))
 
   val system =
-    System(List((proc, Infinite)), 1, None, NoTime, List(), assertions)
+    System(List((proc, Infinite)), 1, assertions)
 
   new VerificationLoop(system)
 
