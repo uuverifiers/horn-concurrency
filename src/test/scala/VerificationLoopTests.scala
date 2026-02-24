@@ -700,7 +700,7 @@ class VerificationLoopTests extends FlatSpec {
     val p1 = new Predicate("p1", 5)
     val p2 = new Predicate("p2", 5)
 
-    val enc =
+    val enc = noOutput(
       new ParametricEncoder(TimedSystem(
                               List((
                                      List((p0(C, 0, 0, 0, id) :- true,                         NoSync),
@@ -714,7 +714,7 @@ class VerificationLoopTests extends FlatSpec {
                                    false :- (p1(C, n, snt, rec, id), n > 2),
                                    false :- (p2(C, n, snt, rec, id), n > 2)),
                               DiscreteTime(0)),
-                            List(List(1)))
+                            List(List(1))))
     assert(solve(enc))
   }
 }

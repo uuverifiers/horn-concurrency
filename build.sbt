@@ -44,6 +44,6 @@ settings(
                                       }}).value,
   resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1"
-//  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT"
+//  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1"
+  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT"
 )
