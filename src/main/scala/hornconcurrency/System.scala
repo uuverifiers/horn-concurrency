@@ -63,7 +63,6 @@ object System {
           p <- c.predicates.iterator)
      yield p).toSet
 
-
   //////////////////////////////////////////////////////////////////////////////
 
   abstract sealed class Synchronisation
@@ -86,6 +85,7 @@ object System {
                                 val domains : Seq[Set[IExpression.Predicate]]) {
     override def toString = name
     def filterDomains(remainingPreds : Set[IExpression.Predicate]) : Barrier
+    def mapDomains(m : Seq[IExpression.Predicate => IExpression.Predicate]) : Barrier
   }
 
   class SimpleBarrier(_name : String,
@@ -94,6 +94,9 @@ object System {
     def filterDomains(remainingPreds : Set[IExpression.Predicate])
                     : SimpleBarrier =
       new SimpleBarrier(name, for (d <- domains) yield (d & remainingPreds))
+    def mapDomains(m : Seq[IExpression.Predicate => IExpression.Predicate])
+                 : SimpleBarrier =
+      new SimpleBarrier(name, for ((d, f) <- domains zip m) yield d.map(f))
   }
 
   /**
@@ -110,6 +113,10 @@ object System {
                     : BarrierFamily =
       new BarrierFamily(name,
                         for (d <- domains) yield (d & remainingPreds),
+                        equivalentProcesses)
+    def mapDomains(m : Seq[IExpression.Predicate => IExpression.Predicate])
+                 : BarrierFamily =
+      new BarrierFamily(name, for ((d, f) <- domains zip m) yield d.map(f),
                         equivalentProcesses)
   }
 
