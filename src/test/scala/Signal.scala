@@ -184,12 +184,12 @@ class SignalTests extends FlatSpec {
       constructMonitor(c_mon => geq(c_mon, toRat(9)))
 
     val system = SignalSystem(
-      List((pProc, Singleton), (monProc, Singleton)),
-      2,
-      assertions,
-      RationalTime(0),
-      Set(1),
-      List(List(pProgressBlock), monProgressBlocks)
+      List((pProc, Singleton), (monProc, Singleton)),   // Processes
+      2,                                                // Number of global variables
+      assertions,                                       // Assertions
+      RationalTime(0),                                  // Index of variable representing time
+      Set(1),                                           // Indexes of signal variables
+      List(List(pProgressBlock), monProgressBlocks)     // Progress invariants
     )
 
     val encoder = new SignalEncoder(system)
