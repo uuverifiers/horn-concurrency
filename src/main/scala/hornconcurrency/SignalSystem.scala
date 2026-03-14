@@ -34,6 +34,7 @@ import ap.types.MonoSortedPredicate
 import ap.theories.ADT
 import ap.theories.rationals.Rationals
 import ap.util.{Seqs, Combinatorics}
+import ap.terfor.ConstantTerm
 
 import lazabs.horn.Util
 import lazabs.horn.bottomup.HornClauses
@@ -47,12 +48,6 @@ import scala.collection.mutable.{LinkedHashSet, HashSet => MHashSet,
 object SignalSystem {
   import System._
 
-/*
-  val (signalSort, signalCtor, Seq(currentValue, lastContinuousValue)) =
-    ADT.createRecordType("signal",
-                         List(("currentValue",        Sort.Bool),
-                              ("lastContinuousValue", Sort.Bool)))
-*/
   case class ProgressBlock(invariants : Seq[HornClauses.Clause])
 
   /**
@@ -79,6 +74,72 @@ object SignalSystem {
       val signals = _signals
       val progressBlocks = _progressBlocks
     } with SignalSystem
+
+  import Rationals.{plus, minus, mul, zero, lessThan, lessThanOrEqual,
+                    leq, lt, Fraction}
+
+  object RatGtZero {
+    def unapply(f : IFormula) : Option[ITerm] = f match {
+      case IAtom(lessThan, Seq(t1, t2)) => Some(minus(t2, t1))
+      case _                            => None
+    }
+  }
+
+  object RatGeqZero {
+    def unapply(f : IFormula) : Option[ITerm] = f match {
+      case IAtom(lessThanOrEqual, Seq(t1, t2)) => Some(minus(t2, t1))
+      case _                                   => None
+    }
+  }
+
+  /**
+   * Replace a rational <code>const</code> with
+   * <code>newConst + epsilon</code> or <code>newConst - epsilon</code>.
+   */
+  class EpsilonSubstitutor(const       : ConstantTerm,
+                           newConst    : ConstantTerm,
+                           positiveEps : Boolean)
+        extends CollectingVisitor[Unit, IExpression] {
+    import IExpression._
+
+    val ConstSum = Rationals.SymbolSum(i(const))
+
+    def apply(f : IFormula) : IFormula =
+      visit(f, ()).asInstanceOf[IFormula]
+
+    override def preVisit(t : IExpression, arg : Unit) = t match {
+      case RatGtZero(ConstSum(Const(num), Const(denom), rest)) => {
+        assert(denom.signum > 0)
+        val newTerm = plus(mul(Fraction(num, denom), i(newConst)), rest)
+        if ((num.signum > 0) == positiveEps)
+          // c + eps > 0  <=>  c >= 0
+          ShortCutResult(leq(zero, newTerm))
+        else
+          // c - eps > 0  <=>  c > 0
+          ShortCutResult(lt(zero, newTerm))
+      }
+      case RatGeqZero(ConstSum(Const(num), Const(denom), rest)) => {
+        assert(denom.signum > 0)
+        val newTerm = plus(mul(Fraction(num, denom), i(newConst)), rest)
+        if ((num.signum > 0) == positiveEps)
+          // c + eps >= 0  <=>  c >= 0
+          ShortCutResult(leq(zero, newTerm))
+        else
+          // c - eps >= 0  <=>  c > 0
+          ShortCutResult(lt(zero, newTerm))
+      }
+      case _ => {
+        super.preVisit(t, arg)
+      }
+    }
+
+    def postVisit(t : IExpression, arg : Unit, subres : Seq[IExpression]) = {
+      if (t == i(const))
+        throw new Exception(
+          "can only substitute with epsilon in the context of inequalities")
+      t update subres
+    }
+  }
 
 }
 
@@ -107,17 +168,23 @@ trait SignalSystem extends System {
 class SignalEncoder(system : SignalSystem) {
   import system._
   import System._
+  import SignalSystem._
   import Rationals.{dom => Rat}
   import IExpression._
   import HornClauses.Clause
 
   // We need to introduce copies of the signal variables as global variables
   val newGlobalVarNum = globalVarNum + signals.size
+  val newGlobalVarSorts = globalVarSorts ++ (0 until signals.size).map(x => Rat)
 
   val signalIndexesSorted =
     signals.toSeq.sorted
   val lastContinuousSignalValue =
-    signalIndexesSorted.map(ind => Sort.Bool.newConstant(s"SignalCopy$ind"))
+    signalIndexesSorted.map(ind => Sort.Bool.newConstant(s"sig$ind"))
+  val lastContinuousSignalIndexesSorted =
+    globalVarNum until newGlobalVarNum
+  val allSignalIndexes =
+    signalIndexesSorted ++ lastContinuousSignalIndexesSorted
 
   // We also need local variables storing the entry time for each progress
   // block
@@ -142,29 +209,71 @@ class SignalEncoder(system : SignalSystem) {
   val extendedLocalPreds =
     localPreds.map(s => s.map(toExtendedPred))
 
-  // For each local predicate (actually, only the ones inside progress blocks),
-  // we need a copy to represent environment transitions
-  val localPredCopies =
-    extendedLocalPreds.map(s => s.map(
-      p => MonoSortedPredicate(p.name + "_envCopy", predArgumentSorts(p))))
+  val progressInvariantClauses =
+    for (progBlocks <- progressBlocks) yield
+      for (block <- progBlocks) yield {
+        (for (clause@Clause(_, Seq(atom), _) <- block.invariants.iterator)
+         yield (atom.pred, clause)).toMap
+      }
+  val progressDomains =
+    progressInvariantClauses.map(
+      blocks => blocks.map(_.keySet).foldLeft(Set[Predicate]())(_ ++ _))
 
+  // For each local predicate inside a progress block,
+  // we need a copy to represent environment transitions
   val toPredCopy =
-    (for ((preds1, preds2) <- extendedLocalPreds.iterator zip localPredCopies.iterator;
-          (p1, p2) <- preds1.iterator zip preds2.iterator)
-     yield (p1 -> p2)).toMap
+    (for (preds <- progressDomains.iterator;
+          p <- preds.iterator;
+          extP = toExtendedPred(p);
+          newP = MonoSortedPredicate(extP.name + "_delay",
+                                     predArgumentSorts(extP) :+ Rat))
+     yield (extP -> newP)).toMap
+
+  val timeIndex = timeSpec.index
+
+  val localTimeCopy =
+    Rat.newConstant("LastC")
 
   val envPreds =
-    List(MonoSortedPredicate("Env0", globalVarSorts),
-         MonoSortedPredicate("Env1", globalVarSorts),
-         MonoSortedPredicate("Env2", globalVarSorts))
+    List(MonoSortedPredicate("Env0", newGlobalVarSorts),
+         MonoSortedPredicate("Env1", newGlobalVarSorts),
+         MonoSortedPredicate("Env2", newGlobalVarSorts))
 
   val newLocalPreds =
-    (extendedLocalPreds zip localPredCopies).map(p => p._1 ++ p._2) :+ envPreds
+    (for (preds <- extendedLocalPreds) yield {
+      val copies = preds.collect(toPredCopy)
+      preds ++ copies
+    }) :+ envPreds
 
   val delayBarrier1 =
     new SimpleBarrier("DelayBarrier1", newLocalPreds.map(_.toSet))
   val delayBarrier2 =
     new SimpleBarrier("DelayBarrier2", newLocalPreds.map(_.toSet))
+
+  val delayClauses = {
+    val args =
+      for ((s, n) <- newGlobalVarSorts.zipWithIndex) yield i(s.newConstant(s"a$n"))
+    val time =
+      args(timeIndex)
+    val newTime =
+      i(Rat.newConstant(s"b$timeIndex"))
+    val updatedArgs =
+      allSignalIndexes.foldLeft(args.updated(timeIndex, newTime)) {
+        case (args, n) => args.updated(n, i(Sort.Bool.newConstant(s"b$n")))
+      }
+    List(
+      (Clause(envPreds(0)(args : _*), List(), true),
+       NoSync),
+      (Clause(envPreds(1)(args : _*), List(envPreds(0)(args : _*)), true),
+       BarrierSync(delayBarrier1)),
+      (Clause(envPreds(2)(updatedArgs : _*),
+         List(envPreds(1)(args : _*)),
+         Rationals.gt(newTime, time)),
+       NoSync),
+      (Clause(envPreds(0)(args : _*), List(envPreds(2)(args : _*)), true),
+       BarrierSync(delayBarrier2))
+    )
+  }
 
   val toExtendedAtom : IAtom => IAtom =
     (a : IAtom) =>
@@ -194,19 +303,14 @@ class SignalEncoder(system : SignalSystem) {
       case s => s
     }
 
-  val timeIndex = timeSpec.index
-
   val newLocalProcesses =
-    for ((((clauses, r), progBlocks), entryClocks) <-
-           processes.zip(progressBlocks).zip(progressEntryClocks)) yield {
-      val blockInvClauses =
-        for (block <- progBlocks) yield {
-          (for (clause@Clause(_, Seq(atom), _) <- block.invariants.iterator)
-           yield (atom.pred, clause)).toMap
-        }
+    for (((((clauses, r), progBlocks), entryClocks), blockInvClauses) <-
+           processes.zip(progressBlocks)
+                    .zip(progressEntryClocks)
+                    .zip(progressInvariantClauses)) yield {
       val blockDomains =
         blockInvClauses.map(_.keySet)
-      
+
       // Replace predicates in all clauses with the new predicates, add resets
       // for the progress entry clocks
       val extendedClauses =
@@ -253,9 +357,8 @@ class SignalEncoder(system : SignalSystem) {
             }
 
           val extBaseAtom = toExtendedAtom(baseAtom)
-          val extBaseAtomCopy = IAtom(toPredCopy(extBaseAtom.pred), extBaseAtom.args)
-
           val time = extBaseAtom.args(timeIndex)
+          val IConstant(timeConst) = time
 
           val guard1 =
             and(for ((inv, clock) <- invariantsAndClocks)
@@ -265,18 +368,38 @@ class SignalEncoder(system : SignalSystem) {
             (for ((ind, newS) <- signalIndexesSorted zip lastContinuousSignalValue;
                   IConstant(s) = extBaseAtom(ind))
             yield (s -> i(newS))).toMap
-
-          val guard2 = // TODO
+          val guard2Conj =
             ConstantSubstVisitor(and(invariantsAndClocks.map(_._1)), signalSubst)
 
+          val guard2Parts =
+            LineariseVisitor(Transform2NNF(guard2Conj), IBinJunctor.And)
+          val (timedGuard2Parts, untimedGuard2Parts) =
+            guard2Parts.partition(f => SymbolCollector.constants(f)(timeConst))
+
+          val clockSubst1 =
+            new EpsilonSubstitutor(timeConst, localTimeCopy, true)
+          val clockSubst2 =
+            new EpsilonSubstitutor(timeConst, timeConst, false)
+
+          val guard2 =
+            clockSubst1(and(timedGuard2Parts)) &&&
+            clockSubst2(and(timedGuard2Parts)) &&&
+            and(untimedGuard2Parts)
+
           List(
-            (Clause(extBaseAtomCopy, List(extBaseAtom), guard1),
-            BarrierSync(delayBarrier1)),
-            (Clause(extBaseAtom, List(extBaseAtomCopy), guard2),
-            BarrierSync(delayBarrier2))
+            (Clause(IAtom(toPredCopy(extBaseAtom.pred),
+                          extBaseAtom.args :+ time),
+                    List(extBaseAtom),
+                    guard1),
+             BarrierSync(delayBarrier1)),
+            (Clause(extBaseAtom,
+                    List(IAtom(toPredCopy(extBaseAtom.pred),
+                               extBaseAtom.args :+ i(localTimeCopy))),
+                    guard2),
+             BarrierSync(delayBarrier2))
           )
         }).flatten
-      (extendedClauses, r)
+      (extendedClauses ++ delayClauses, r)
     }
 
   val newAssertions =
@@ -288,7 +411,7 @@ class SignalEncoder(system : SignalSystem) {
       (ts : Seq[ITerm]) => a(ts.take(globalVarNum))
     }
 
-  val result = System(newLocalProcesses,
+  val result = System(newLocalProcesses :+ (delayClauses, Singleton),
                       newGlobalVarNum,
                       newAssertions,
                       newGlobalVarAssumptions,
