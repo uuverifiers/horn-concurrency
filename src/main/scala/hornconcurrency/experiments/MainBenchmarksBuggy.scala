@@ -27,13 +27,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package hornconcurrency
+package hornconcurrency.experiments
+
+import hornconcurrency._
 
 import ap.parser._
 import lazabs.horn.Util
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
 
-object MainBenchmarks extends App {
+object MainBenchmarksBuggy extends App {
 
   import HornClauses._
   import IExpression._
@@ -43,15 +45,13 @@ object MainBenchmarks extends App {
 
   ////////////////////////////////////////////////////////////////
   // Benchmarks - turn off = false or on = true
-  val fischerFlag = true
-  val csmaFlag = false
-  val ttaFlag = false
-  val tta2Flag = false
-  val tta3Flag = false
-  val lynchFlag = false
-  val lynch2Flag = false
-  val trainFlag = false
-  val bipFlag = true
+  val fischerFlagB = false
+  val csmaFlagB = false
+  val tta2FlagB = false
+  val lynchFlagB = false
+  val lynch2FlagB = false
+  val trainFlagB = false
+  val bipFlagB = false
   ////////////////////////////////////////////////////////////////
 
   def solve(enc : ParametricEncoder) = {
@@ -72,9 +72,9 @@ object MainBenchmarks extends App {
   }
   }
 
-  // Fisher Protocol
+  // Fisher Buggy  Protocol
   {
-    println("Fisher example")
+    println("Fisher Buggy example")
 
     // global
     val C = new ConstantTerm("C")
@@ -100,7 +100,7 @@ object MainBenchmarks extends App {
                                                   ((C - xn) <= U*1), ((C - xn) === 0), (l1 === 0), (l2 === 1))
 
     val c3 = p(2)(C, U, num,  gidn, id, xn, l2) :- (p(1)(C, U, num, gid, id, x, l1), ((C - x) <= U*1), (C - xn === 0), (gidn === id),  (l1 === 1), (l2 === 2))
-    val c4 = p(3)(C, U, num,  gid, id, x,  l2) :- (p(2)(C, U, num, gid, id, x, l1), ((C - x) > U*1), (gid === id), (l1 === 2), (l2 === 3))
+    val c4 = p(3)(C, U, num,  gid, id, x,  l2) :- (p(2)(C, U, num, gid, id, x, l1),/* (gid === id),*/  ((C - x) > U*1), (l1 === 2), (l2 === 3))
     val c7 = p(1)(C, U, num,  gid, id, xn, l2) :- (p(2)(C, U, num, gid, id, x, l1), (gid === 0), ((C - xn) <= U*1), (C - xn === 0), (l1 === 2), (l2 === 1))
     val c5 = p(4)(C, U, numn, gid, id,  x, l2) :- (p(3)(C, U, num, gid, id, x, l1), (numn === num + 1), (l2 === 4), (l1 === 3))
 
@@ -112,7 +112,6 @@ object MainBenchmarks extends App {
     val timeInv =  false :- (p(1)(C, U, num, gid, id, x, l1), !((C - x) <= U*1))
 
     val assertion = false :- (obs(0)(C, U, num, gid, 0) & num > 1)
-    //val assertion = false :- (p(4)(C, num, gid, id, x, l1) & num > 1)
 
     val system = System(
                             List((for (c <- List(c1, c2, c3, c4, c5, c6, c7)) // p
@@ -125,15 +124,16 @@ object MainBenchmarks extends App {
                             4, None,
                             ContinuousTime(0, 1),
                             List(timeInv), List(assertion))
-    if (fischerFlag)
+    if (fischerFlagB)
       new VerificationLoop(system) 
   }
 
+
   println
 
-  // CSMA Protocol
+  // CSMA Buggy Protocol
   {
-    println("CSMA example")
+    println("CSMA Buggy example")
 
     // Constants
     val lambda = 808
@@ -236,7 +236,7 @@ object MainBenchmarks extends App {
     val timeInvs = List(
       (C - c <= U*lambda) :- sender(1)(C, U, err, gid, id, c, l1),
       (C - c < U*2*sigma) :- sender(2)(C, U, err, gid, id, c, l1)
-      ,(C - c < U*sigma) :- bus(2)(C, U, err, gid, c, l1)
+      //,(C - c < U*sigma) :- bus(2)(C, U, err, gid, c, l1)
     )
 
     val assertions =
@@ -250,137 +250,110 @@ object MainBenchmarks extends App {
           ),
       4, None, ContinuousTime(0, 1), timeInvs, assertions)
 
-    if (csmaFlag)
+    if (csmaFlagB)
       new VerificationLoop(system)
 
   }
 
+
   println
-
-
-
-  // TTA Protocol
+  // Lynch Shavit Buggy Protocol
   {
-    println("TTA example")
+    println("Lynch-Shavit Buggy example")
 
-    // Constants
-    val N = 10
-    val slotTime = 30
-    val roundTime = slotTime * N
-    val droundTime = 2*roundTime
-    val prop = 10
-    val maxInitTime = 300
+    val T = 1; // Time bound constant
 
-    //val coldTime = roundTime + (slotTime * (id - 1) )
-    // val 
-
-    // Processes
-    val node = for (i <- 0 to (3 + 2)) yield (new Predicate("node" + i, 7))
-    //val bus  = for (i <- 0 to 2) yield (new Predicate("bus" + i, 6 ))
-
-    val C = new ConstantTerm("C") // global clock
+    // global
+    val C = new ConstantTerm("C")
     val U = new ConstantTerm("U")
-    val err = new ConstantTerm("err") 
-    val errn = new ConstantTerm("err")
-    val origin = new ConstantTerm("gid") 
-    val originn = new ConstantTerm("gidn") 
+    val count = new ConstantTerm("count")
+    val countn = new ConstantTerm("countn")
+    val v1 = new ConstantTerm("v1")
+    val v1n = new ConstantTerm("v1n")
+    val v2 = new ConstantTerm("v2")
+    val v2n = new ConstantTerm("v2n")
+
+    // local
     val id = new ConstantTerm("id")
-    val slot = new ConstantTerm("slot")
-    val slotn = new ConstantTerm("slot")
-    val slot2 = new ConstantTerm("slot")
-    val c = new ConstantTerm("c1") 
-    val cn = new ConstantTerm("c2")
+    val cn = new ConstantTerm("cn")
+    val c = new ConstantTerm("c")
+    val l1 = new ConstantTerm("l1")
+    val l2 = new ConstantTerm("l2")
 
-    //val listen = (U*droundTime + (/*U*slotTime*U*id - */  (U*slotTime) * U ))
-    val listen = (droundTime + slotTime*(id  - 1))
-    val cold = (roundTime + slotTime*(id - 1))
+    val p = for (i <- 0 to 8) yield (new Predicate("p" + i, 8))
+    val obs = for (i <- 0 to 1) yield (new Predicate("obs" + i, 6))
 
-    // broadcast channel via barrier
-    val csFrame = new SimpleBarrier("csFrame", List(node.toSet))
-    val iFrame = new SimpleBarrier("iFrame", List(node.toSet))
+    val c1 = p(0)(C, U, count, v1, v2, id, c, l1) :- ((c === C), (count === 0), (v1 === -1), (v2 === 0), (l1 === 0))
 
-    // mode(4) and node(5) are temporary nodes
+    val c2 = p(1)(C, U, count, v1, v2, id, cn, l2) :- (p(0)(C, U, count, v1, v2,  id, c, l1), 
+               (v1 === -1), (id > -1), ((C - cn) === 0), ((C - cn) <= U*T), (l1 === 0), (l2 === 1))
 
-    val nodeProcess = List(
-      (node(0)(C, U, err, origin, id, slot, c) :- ((origin === 0), (slot === 0), (err === 0), (c === C)), NoSync),
+    val c3 = p(2)(C, U, count, v1n, v2,  id, cn,  l2) :- (p(1)(C, U, count, v1, v2,  id, c,  l1),
+               (C - c <= U*T), (v1n === id), (C - cn === 0), (l1 === 1), (l2 === 2))
 
-      (node(1)(C, U, err, origin, id, slot, cn) :-
-         (node(0)(C, U, err, origin, id, slot, c), (C - cn === 0), ((C - cn) <= listen)), 
-          NoSync), // checked
+    val c4 = p(0)(C, U, count, v1, v2, id, c, l2) :- (p(2)(C, U, count, v1, v2, id, c, l1),
+               !(v1 === id), (l1 === 2), (l2 === 0))
 
-      (node(4)(C, U, err, origin, id, slot, cn) :-
-         (node(1)(C, U, err, origin, id, slot, c), (C - cn === 0), (originn === id), 
-         (C - c >= listen)), 
-          BarrierSync(csFrame)), // Temp state to resolve the issue with g var and barrier
+    val c5 = p(3)(C, U, count, v1, v2,  id, c,  l2) :- (p(2)(C, U, count, v1, v2,  id, c,  l1),
+               /*(v1 === id),*/ (C - c > U*T), (l1 === 2), (l2 === 3))
 
-      (node(2)(C, U, err, originn, id, slot, c) :-
-         (node(4)(C, U, err, origin, id, slot, c), (C - cn === 0), (originn === id), 
-          ((C - cn) <= cold)), 
-          NoSync), // Issue her
+    val c6 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(3)(C, U, count, v1, v2,  id, c,  l1),
+               (v2 === 1), (l1 === 3), (l2 === 0))
 
-      (node(2)(C, U, err, origin, id, slot, cn) :-
-         (node(2)(C, U, err, origin, id, slot, c), (C - cn === 0), 
-         (C - c >= cold), ((C-cn) <= cold)), 
-          BarrierSync(csFrame)), // Checked
+    val c7 = p(4)(C, U, count, v1, v2,  id, cn,  l2) :- (p(3)(C, U, count, v1, v2,  id, c,  l1),
+               (v2 === 0), (C - cn === 0), ((C - cn) <= U*T), (l1 === 3), (l2 === 4))
 
-      (node(2)(C, U, err, origin, id, slot, cn) :-
-         (node(1)(C, U, err, origin, id, slot, c), (C - cn === 0), ((C-cn) <= cold)), 
-          BarrierSync(csFrame)), // Checked
+    val c8 = p(5)(C, U, count, v1, v2n,  id, cn,  l2) :- (p(4)(C, U, count, v1, v2,  id, c,  l1),
+               (v2n === 1), (C - cn === 0), ((C - c) <= U*T), (l1 === 4), (l2 === 5))
 
-      (node(3)(C, U, err, origin, id, slotn, cn) :-
-         (node(2)(C, U, err, origin, id, slot, c), (C - cn === 0), (slotn === origin), ((C-cn) <= slotTime)), 
-          BarrierSync(iFrame)), // Checked
+    val c9 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(5)(C, U, count, v1, v2,  id, c,  l1),
+               !(v1 === id), (l1 === 5), (l2 === 0))
 
-      (node(3)(C, U, err, origin, id, slotn, cn) :-
-         (node(2)(C, U, err, origin, id, slot, c),  (C - cn === 0), (slotn === origin), ((C-cn) <= slotTime)), 
-          BarrierSync(csFrame)),
+   // going to CS
+    val c10 = p(6)(C, U, countn, v1, v2,  id, c,  l2) :- (p(5)(C, U, count, v1, v2,  id, c,  l1),
+               (countn === count + 1), /*(v1 === id),*/ (l1 === 5), (l2 === 6))
+   // out of CS
+   val c11 = p(7)(C, U, countn, v1, v2,  id, cn,  l2) :- (p(6)(C, U, count, v1, v2,  id, c,  l1),
+               (countn === count - 1), (C - cn === 0), (l1 === 6), (l2 === 7))
 
-      (node(3)(C, U, err, origin, id, slotn, cn) :-
-         (node(1)(C, U, err, origin, id, slot, c), (C - cn === 0), (slotn === origin), ((C-cn) <= slotTime)), 
-          BarrierSync(iFrame)),
+   // 7 to 8
+   val c12 = p(8)(C, U, count, v1, v2n,  id, cn, l2) :- (p(7)(C, U, count, v1, v2,  id, c, l1),
+              (C - cn === 0), (v2n === 0), (C - c <= U*T), (l1 === 7), (l2 === 8))
 
-      (node(5)(C, U, err, originn, id, slot, cn) :-
-         (node(3)(C, U, err, origin, id, slot, c), (C - cn === 0), (originn === id), // issue here
-         ((C-cn) <= slotTime)), /*(!(slot < N) | (slot + 1 === id)), (!(slot >= N) | (slot === id)), */
-         BarrierSync(iFrame)),
+   // 8  to 0
+   val c13 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(8)(C, U, count, v1, v2,  id, c,  l1),
+               (v1n === 0), (C - c <= U*T), (l1 === 8), (l2 === 0))
 
-      (node(3)(C, U, err, origin, id, slotn, cn) :-
-         (node(5)(C, U, err, origin, id, slot, c), (C - cn === 0), (slotn === id),  // issue here
-         ((C-c) >= slotTime), (slot + 1 === id), ((C-cn) <= slotTime)), /*(!(slot < N) | (slot + 1 === id)), (!(slot >= N) | (slot === id)), */
-         NoSync),
+   val o1= obs(0)(C, U, count, v1, v2, 0) :- (count === 0)
+   val o2= obs(1)(C, U, countn, v1, v2, 1) :- (obs(0)(C, U, count, v1, v2, 0), count > 1) 
 
-      (node(3)(C, U, err, origin, id, slotn, cn) :- 
-         (node(3)(C, U, err, origin, id, slot, c), ((C-cn) === 0), (slotn === slot + 1),
-         /*(!(slot < N) | (slotn === slot + 1)), (!(slot >= N) | (slotn === slot)),*/ ((C-cn) <= slotTime) ), 
-          BarrierSync(iFrame))
-    )
+    val timeInv =  List(false :- (p(1)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T)), 
+                        false :- (p(4)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T))
+                        )
 
-    val timeInvs = List(
-      (C - c <= maxInitTime) :- node(0)(C, U, err, origin, id, slot, c),
-      (C - c <= cold) :- node(1)(C, U, err, origin, id, slot, c),
-      (C - c <= listen) :- node(2)(C, U, err, origin, id, slot, c),
-      (C - c <= slotTime) :- node(3)(C, U, err, origin, id, slot, c),
-      (C - c === 0) :- node(4)(C, U, err, origin, id, slot, c),
-      (C - c === 0) :- node(5)(C, U, err, origin, id, slot, c)
-    )
+    //val assertion = false :- (p(6)(C, U, count, v1, v2, id, c,  l1) & count > 1)
+    val assertion = false :- (obs(0)(C, U, count, v1, v2, 0) & count > 1)
 
-    //val assertions = List(false :- (node(3)(C, U, err, origin, id, slot, c) , !(origin === slot) ))
-    val assertions = List(false :- (node(3)(C, U, err, origin, id, slot, c) & (origin === id)))
-
-    val system =
-    System(
-      List((nodeProcess, Infinite)),
-      4, None, DiscreteTime(0), timeInvs, assertions)
-
-    if (ttaFlag)
-      new VerificationLoop(system)
+    val system = System(
+                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)) // p
+                                    yield (c, NoSync),
+                                  Infinite)
+                                  ,(for (o <- List(o1, o2))
+                                    yield (o, NoSync),
+                                  Singleton)
+                                ), 
+                            5, None,
+                            ContinuousTime(0, 1),
+                            timeInv, List(assertion))
+    if(lynchFlagB)
+      new VerificationLoop(system) 
   }
 
   println
 
-  // Lynch Shavit Protocol
+  // Lynch Shavit Buggy Protocol
   {
-    println("Lynch-Shavit example")
+    println("Lynch-Shavit Buffy example")
 
     val T = 1; // Time bound constant
 
@@ -417,7 +390,7 @@ object MainBenchmarks extends App {
                !(v1 === id))
 
     val c5 = p(3)(C, U, v1, v2,  id, c) :- (p(2)(C, U, v1, v2,  id, c), (id > -1),
-               (v1 === id), (C - c > U*T))
+               /*(v1 === id),*/ (C - c > U*T))
 
     val c6 = p(0)(C, U, v1, v2, id, c) :- (p(3)(C, U, v1, v2,  id, c), (id > -1),
                (v2 === 1))
@@ -432,8 +405,8 @@ object MainBenchmarks extends App {
                !(v1 === id))
 
    // going to CS
-    val c10 = p(6)(C, U, v1, v2,  id, c) :- (p(5)(C, U, v1, v2,  id, c), (id > -1),
-               (v1 === id))
+    val c10 = p(6)(C, U, v1, v2,  id, c) :- (p(5)(C, U, v1, v2,  id, c), (id > -1)
+               /*,(v1 === id)*/)
    // out of CS
    val c11 = p(7)(C, U, v1, v2,  id, cn) :- (p(6)(C, U, v1, v2,  id, c), (id > -1),
                (C - cn === 0))
@@ -463,112 +436,12 @@ object MainBenchmarks extends App {
                             4, None,
                             ContinuousTime(0, 1),
                             timeInv, List(assertion))
-    if(lynch2Flag)
+    if(lynch2FlagB)
       new VerificationLoop(system) 
   }
 
-  println
-
-  // Lynch Shavit Protocol
   {
-    println("Lynch-Shavit example")
-
-    val T = 1; // Time bound constant
-
-    // global
-    val C = new ConstantTerm("C")
-    val U = new ConstantTerm("U")
-    val count = new ConstantTerm("count")
-    val countn = new ConstantTerm("countn")
-    val v1 = new ConstantTerm("v1")
-    val v1n = new ConstantTerm("v1n")
-    val v2 = new ConstantTerm("v2")
-    val v2n = new ConstantTerm("v2n")
-
-    // local
-    val id = new ConstantTerm("id")
-    val id2 = new ConstantTerm("id")
-    val cn = new ConstantTerm("cn")
-    val c = new ConstantTerm("c")
-    val l1 = new ConstantTerm("l1")
-    val l2 = new ConstantTerm("l2")
-
-    val p = for (i <- 0 to 8) yield (new Predicate("p" + i, 8))
-    val obs = for (i <- 0 to 1) yield (new Predicate("obs" + i, 6))
-
-    val c1 = p(0)(C, U, count, v1, v2, id, c, l1) :- ((c === C), (count === 0), (v1 === -1), (v2 === 0), (l1 === 0))
-
-    val c2 = p(1)(C, U, count, v1, v2, id, cn, l2) :- (p(0)(C, U, count, v1, v2,  id, c, l1), 
-               (v1 === -1), (id > -1), ((C - cn) === 0), ((C - cn) <= U*T), (l1 === 0), (l2 === 1))
-
-    val c3 = p(2)(C, U, count, v1n, v2,  id, cn,  l2) :- (p(1)(C, U, count, v1, v2,  id, c,  l1),
-               (C - c <= U*T), (v1n === id), (C - cn === 0), (l1 === 1), (l2 === 2))
-
-    val c4 = p(0)(C, U, count, v1, v2, id, c, l2) :- (p(2)(C, U, count, v1, v2, id, c, l1),
-               !(v1 === id), (l1 === 2), (l2 === 0))
-
-    val c5 = p(3)(C, U, count, v1, v2,  id, c,  l2) :- (p(2)(C, U, count, v1, v2,  id, c,  l1),
-               (v1 === id), (C - c > U*T), (l1 === 2), (l2 === 3))
-
-    val c6 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(3)(C, U, count, v1, v2,  id, c,  l1),
-               (v2 === 1), (l1 === 3), (l2 === 0))
-
-    val c7 = p(4)(C, U, count, v1, v2,  id, cn,  l2) :- (p(3)(C, U, count, v1, v2,  id, c,  l1),
-               (v2 === 0), (C - cn === 0), ((C - cn) <= U*T), (l1 === 3), (l2 === 4))
-
-    val c8 = p(5)(C, U, count, v1, v2n,  id, cn,  l2) :- (p(4)(C, U, count, v1, v2,  id, c,  l1),
-               (v2n === 1), (C - cn === 0), ((C - c) <= U*T), (l1 === 4), (l2 === 5))
-
-    val c9 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(5)(C, U, count, v1, v2,  id, c,  l1),
-               !(v1 === id), (l1 === 5), (l2 === 0))
-
-   // going to CS
-    val c10 = p(6)(C, U, countn, v1, v2,  id, c,  l2) :- (p(5)(C, U, count, v1, v2,  id, c,  l1),
-               (countn === count + 1), (v1 === id), (l1 === 5), (l2 === 6))
-   // out of CS
-   val c11 = p(7)(C, U, countn, v1, v2,  id, cn,  l2) :- (p(6)(C, U, count, v1, v2,  id, c,  l1),
-               (countn === count - 1), (C - cn === 0), (C - cn <= U*T), (l1 === 6), (l2 === 7))
-
-   // 7 to 8
-   val c12 = p(8)(C, U, count, v1, v2n,  id, cn, l2) :- (p(7)(C, U, count, v1, v2,  id, c, l1),
-              (C - cn === 0), (v2n === 0), (C - cn <= U*T), (l1 === 7), (l2 === 8))
-
-   // 8  to 0
-   val c13 = p(0)(C, U, count, v1, v2,  id, c,  l2) :- (p(8)(C, U, count, v1, v2,  id, c,  l1),
-               (v1n === 0), (C - c <= U*T), (l1 === 8), (l2 === 0))
-
-   val o1= obs(0)(C, U, count, v1, v2, 0) :- (count === 0)
-   val o2= obs(1)(C, U, countn, v1, v2, 1) :- (obs(0)(C, U, count, v1, v2, 0), count > 1) 
-
-    val timeInv =  List(false :- (p(1)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T)), 
-                        false :- (p(4)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T)),
-                        false :- (p(7)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T)),
-                        false :- (p(8)(C, U, count, v1, v2, id, c,  l1), ((C - c) <= U*T))
-                        )
-
-    val assertion = false :- (p(6)(C, U, count, v1, v2, id, c,  l1) & count > 1)
-    //val assertion = false :- (obs(0)(C, U, count, v1, v2, 0) & count > 1)
-    //val assertion = false :- (p(6)(C, U, count, v1, v2, id, c,  l1) & p(6)(C, U, count, v1, v2, id2, c,  l1))
-    val system = System(
-                            List((for (c <- List(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)) // p
-                                    yield (c, NoSync),
-                                  Infinite)
-                                  ,(for (o <- List(o1, o2))
-                                    yield (o, NoSync),
-                                  Singleton)
-                                ), 
-                            5, None,
-                            ContinuousTime(0, 1),
-                            timeInv, List(assertion))
-    if(lynchFlag)
-      new VerificationLoop(system) 
-  }
-
-
-  println
-
-  {
-    println("Train crossing example")
+    println("Train crossingi buggy example")
 
     val train = for (i <- 0 to 4) yield (new Predicate("train" + i, 4 + 3))
     val gate  = for (i <- 0 to 5) yield (new Predicate("gate" + i, 4 + 3))
@@ -599,13 +472,13 @@ object MainBenchmarks extends App {
     (gate(5)(C, U, e, ticket, next_available_ticket, next_available_ticket, y) :-
        gate(1)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     NoSync),
 
-    (gate(3)(C, U, e, next_waiting_ticket, next_waiting_ticket+1, next_available_ticket, y) :-
+    (gate(3)(C, U, e, next_waiting_ticket, next_waiting_ticket /*+1*/, next_available_ticket, y) :-
        (gate(5)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-        next_waiting_ticket < next_available_ticket),                                               NoSync),
+        next_waiting_ticket /*<*/ > next_available_ticket),                                               NoSync),
 
     (gate(2)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y) :-
        (gate(5)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-        next_waiting_ticket === next_available_ticket),                                             NoSync),
+        next_waiting_ticket /*===*/ > next_available_ticket),                                             NoSync),
 
     (gate(0)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y) :-
        gate(3)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),                     Send(go)),
@@ -633,11 +506,11 @@ object MainBenchmarks extends App {
 
     (train(2)(C, U, e, ticket, id, ticket, C) :-
        (train(1)(C, U, e, ticket, id, my_ticket, x),
-        C - x <= U*10, e === id),                                                                   Receive(stop)),
+        C - x <= U*10 ,e === id),                                                                   Receive(stop)),
 
     (train(3)(C, U, e, ticket, id, my_ticket, C) :-
        (train(2)(C, U, e, ticket, id, my_ticket, x),
-        my_ticket === ticket),                                                                      Receive(go)),
+        !(my_ticket === ticket)),                                                                      Receive(go)),
 
     (train(0)(C, U, e, ticket, id, my_ticket, C) :-
        (train(3)(C, U, e, ticket, id, my_ticket, x),
@@ -654,15 +527,16 @@ object MainBenchmarks extends App {
     )
 
     val timeInvs = List(
-      (C - y <= U*5) :- gate(4)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y),
-      (C - x <= U*20) :- train(1)(C, U, e, ticket, id, my_ticket, x),
-      (C - x <= U*15) :- train(3)(C, U, e, ticket, id, my_ticket, x),
-      (C - x <= U*5) :- train(0)(C, U, e, ticket, id, my_ticket, x)
+      (C - y <= U*5) :- gate(4)(C, U, e, ticket, next_waiting_ticket, next_available_ticket, y)
+      ,(C - x <= U*20) :- train(1)(C, U, e, ticket, id, my_ticket, x),
+      (C - x <= U*15) :- train(3)(C, U, e, ticket, id, my_ticket, x)
+      ,(C - x <= U*5) :- train(0)(C, U, e, ticket, id, my_ticket, x)
     )
 
     val assertions =
       List(false :- (train(0)(C, U, e, ticket, id, my_ticket, x),
                    train(0)(C, U, e, ticket, id2, my_ticket2, x2)))
+
     val system =
       System(
         List((gateProcess, Singleton), (trainProcess, Infinite)),
@@ -670,14 +544,14 @@ object MainBenchmarks extends App {
         ContinuousTime(0, 1),
         timeInvs, assertions)
 
-    if(trainFlag)
+    if(trainFlagB)
       new VerificationLoop(system)
   }
 
   println 
 
   {
-  println("BIP temperature control system, with discrete time")
+  println("BIP temperature control system, with discrete time Buggy")
 
   val l = for (i <- 0 to 8) yield (new Predicate("l" + i, 2 + 1))
   val sync = new ConstantTerm("sync")
@@ -703,7 +577,7 @@ object MainBenchmarks extends App {
      NoSync),
     (l(2)(C, sync, t1) :- (l(3)(C, sync, t1), sync === 4),
      BarrierSync(barrier)),
-    (l(2)(C, sync, t1) :- (l(1)(C, sync, t1), sync === 4, C - t1 >= 800),
+    (l(2)(C, sync, t1) :- (l(1)(C, sync, t1), sync === 4, C - t1 >= 3600),
      BarrierSync(barrier)),
     (l(1)(C, sync, C) :- (l(2)(C, sync, t1), sync === 2),
      BarrierSync(barrier)),
@@ -721,7 +595,7 @@ object MainBenchmarks extends App {
      NoSync),
     (l(5)(C, sync, t2) :- (l(6)(C, sync, t2), sync === 5),
      BarrierSync(barrier)),
-    (l(5)(C, sync, t2) :- (l(4)(C, sync, t2), sync === 5, C - t2 >= 800),
+    (l(5)(C, sync, t2) :- (l(4)(C, sync, t2), sync === 5, C - t2 >= 3600),
      BarrierSync(barrier)),
     (l(4)(C, sync, C) :- (l(5)(C, sync, t2), sync === 3),
      BarrierSync(barrier)),
@@ -758,7 +632,7 @@ object MainBenchmarks extends App {
   val assertions =
     List(false :- (
            l(1)(C, sync, t1), l(4)(C, sync, t2), l(7)(C, sync, th),
-           C - th === 900, C - t1 < 800, C - t2 < 800))
+           C - th === 900, C - t1 < 3600, C - t2 < 3600))
 
   val system =
     System(List((Rod1, Singleton),
@@ -766,17 +640,17 @@ object MainBenchmarks extends App {
                 (Controller, Singleton)),
            2, None, DiscreteTime(0), timeInvs, assertions)
 
-  if(bipFlag)
+  if(bipFlagB)
     new VerificationLoop(system)
   }
 
-  println 
-
-  // TTA 2 Protocol
+  // Buggy TTA 2
   {
     println("TTA example, v2")
 
     val max_init_time = 300
+    val tau_listen = 100
+    val tau_coldstart = 50
     val slot_time = 30
 
     val no_chan = -1
@@ -842,13 +716,13 @@ object MainBenchmarks extends App {
       
       (node(3)(  C, U, lock, N, chan, sender, origin, id, slot, C) :- (
          node(2)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender === id, origin === id,
+         chan === cs_frame /*,sender === id */ /*, origin === id*/,
          C - c >= exact_listen_time),
        BarrierSync(bcChan)),
       
       (node(3)(  C, U, lock, N, chan, sender, origin, id, slot, C) :- (
          node(2)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender =/= id),
+         chan === cs_frame /*,sender =/= id*/),
        BarrierSync(bcChan)),
       
       (node(4)(  C, U, lock, N, chan, sender, origin, id, origin, C) :- (
@@ -938,208 +812,7 @@ object MainBenchmarks extends App {
     val system = System(List((nodeProcess, Infinite)),
                         7, None, DiscreteTime(0), timeInvs, assertions)
 
-    if (tta2Flag)
-      new VerificationLoop(system)
-  }
-
-
-  // TTA 2 Protocol, simplified
-  {
-    println("TTA example, v3")
-
-    val max_init_time = 100
-    val slot_time = 30
-
-    val no_chan = -1
-    val cs_frame = 0
-    val i_frame = 1
-
-    val node = for (i <- 0 to 6) yield (new Predicate("node" + i, 7 + 3))
-
-    val C = new ConstantTerm("C") // global clock
-    val U = new ConstantTerm("U")
-    val lock = new ConstantTerm("lock")
-    val N = new ConstantTerm("N")
-//    val N = 3
-    val origin = new ConstantTerm("origin") 
-    val originn = new ConstantTerm("originn") 
-    val chan = new ConstantTerm("chan")
-    val chann = new ConstantTerm("chann")
-    val sender = new ConstantTerm("sender")
-    val id = new ConstantTerm("id")
-    val id2 = new ConstantTerm("id2")
-    val slot = new ConstantTerm("slot")
-    val slotn = new ConstantTerm("slot")
-    val c = new ConstantTerm("c1") 
-    val cn = new ConstantTerm("cn")
-
-    val exact_listen_time =
-      id * slot_time - slot_time + (N * slot_time * 2)
-    val exact_coldstart_time =
-      id * slot_time - slot_time + (N * slot_time)
-
-    val tau_listen_lower = (N * slot_time * 2)
-    val tau_listen_upper = (N * slot_time * 3) - slot_time
-
-    val tau_coldstart_lower = (N * slot_time)
-    val tau_coldstart_upper = (N * slot_time * 2) - slot_time
-
-    val inc_slot = ite(slot === N, 1, slot + 1)
-    val inc_slotn = ite(slotn === N, 1, slotn + 1)
-
-    val bcChan = new SimpleBarrier("bcChan",
-              List(Set(node(2), node(3), node(4), node(5), node(6))))
-
-    val nodeProcess = List(
-
-      (node(1)(  C, 1, lock, N, no_chan, sender, origin, id, slot, C) :- (
-         id > 0, id <= N),
-       NoSync),
-
-      (node(2)(  C, U, 1,    N, chan, sender, origin, id, slot, C) :- (
-         node(1)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         id > 0, id <= N),
-       NoSync),
-      
-      //////////////////////////////////////////////////////////////////////////
-
-      (node(2)(  C, U, lock, N, cs_frame, id,     id,      id, slot, c) :- (
-         node(2)(C, U, lock, N, chan,     sender, origin,  id, slot, c),
-         C - c >= tau_listen_lower /* exact_listen_time */),
-       NoSync),
-      
-      // cs_frame!
-      (node(3)(  C, U, lock, N, chan, sender, origin, id, slot, C) :- (
-         node(2)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender === id, origin === id,
-         C - c >= tau_listen_lower /* exact_listen_time */),
-       BarrierSync(bcChan)),
-      
-      // cs_frame?
-      (node(6)(  C, U, lock, N, chan, sender, origin, id, slot, C) :- (
-         node(2)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender =/= id),
-       BarrierSync(bcChan)),
-      
-      // i_frame?
-      (node(5)(  C, U, lock, N, chan, sender, origin, id, origin, C) :- (
-         node(2)(C, U, lock, N, chan, sender, origin, id, slot,   c),
-         chan === i_frame, sender =/= id),
-       BarrierSync(bcChan)),
-      
-      //////////////////////////////////////////////////////////////////////////
-
-      (node(3)(  C, U, lock, N, cs_frame, id,     id,     id, slot, c) :- (
-         node(3)(C, U, lock, N, chan,     sender, origin, id, slot, c),
-         C - c >= tau_coldstart_lower /* exact_coldstart_time */),
-       NoSync),
-      
-      // cs_frame!
-      (node(3)(  C, U, lock, N, chan, sender, origin, id, slot, C) :- (
-         node(3)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender === id, origin === id,
-         C - c >= tau_coldstart_lower /* exact_coldstart_time */),
-       BarrierSync(bcChan)),
-      
-      // cs_frame?
-      (node(5)(  C, U, lock, N, chan, sender, origin, id, origin, C) :- (
-         node(3)(C, U, lock, N, chan, sender, origin, id, slot,   c),
-         chan === cs_frame, sender =/= id),
-       BarrierSync(bcChan)),
-      
-      // i_frame?
-      (node(5)(  C, U, lock, N, chan, sender, origin, id, origin, C) :- (
-         node(3)(C, U, lock, N, chan, sender, origin, id, slot,   c),
-         chan === i_frame, sender =/= id),
-       BarrierSync(bcChan)),
-      
-      //////////////////////////////////////////////////////////////////////////
-
-      (node(4)(  C, U, lock, N, chan, sender, origin, id, slot, c) :- (
-         node(4)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         chan === cs_frame, sender =/= id,
-         id > 0, id <= N),
-       BarrierSync(bcChan)),
-      
-      (node(4)(  C, U, lock, N, i_frame, id,     id,      id, slot, c) :- (
-         node(4)(C, U, lock, N, chan,    sender, origin,  id, slot, c),
-         id === inc_slot,
-         id > 0, id <= N),
-       NoSync),
-      
-      // i_frame!
-      (node(4)(  C, U, lock, N, chan, sender, origin, id, id,   C) :- (
-         node(4)(C, U, lock, N, chan, sender, origin, id, id - 1, c),
-         chan === i_frame, sender === id, origin === id,
-         id > 1,
-         C - c >= slot_time,
-         id > 0, id <= N),
-       BarrierSync(bcChan)),
-      
-      // i_frame!
-      (node(4)(  C, U, lock, N, chan, sender, origin, id, id,   C) :- (
-         node(4)(C, U, lock, N, chan, sender, origin, id, N,    c),
-         chan === i_frame, sender === id, origin === id,
-         id === 1,
-         C - c >= slot_time,
-         id > 0, id <= N),
-       BarrierSync(bcChan)),
-      
-      // i_frame?
-      (node(5)(  C, U, lock, N, chan, sender, origin, id, slot + 1, C) :- (
-         node(4)(C, U, lock, N, chan, sender, origin, id, slot,     c),
-         chan === i_frame, sender =/= id, slot < N,
-         id > 0, id <= N),
-       BarrierSync(bcChan)),
-
-      // i_frame?
-      (node(5)(  C, U, lock, N, chan, sender, origin, id, 1, C) :- (
-         node(4)(C, U, lock, N, chan, sender, origin, id, N, c),
-         chan === i_frame, sender =/= id,
-         id > 0, id <= N),
-       BarrierSync(bcChan)),
-
-      //////////////////////////////////////////////////////////////////////////
-
-      (node(4)(  C, U, lock, N, no_chan, sender, origin, id, slot, c) :- (
-         node(5)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         id > 0, id <= N),
-       NoSync),
-
-      (node(3)(  C, U, lock, N, no_chan, sender, origin, id, slot, c) :- (
-         node(6)(C, U, lock, N, chan, sender, origin, id, slot, c),
-         id > 0, id <= N),
-       NoSync)
-
-    )
-
-    val timeInvs = List(
-      (C - c <= max_init_time) :-
-          node(1)(C, U, lock, N, chan, sender, origin, id, slot, c),
-      (C - c <= tau_listen_upper /*exact_listen_time */) :-
-          node(2)(C, U, lock, N, chan, sender, origin, id, slot, c),
-      (C - c <= tau_coldstart_upper /* exact_coldstart_time */) :-
-          node(3)(C, U, lock, N, chan, sender, origin, id, slot, c),
-      (C - c <= tau_coldstart_upper /* exact_coldstart_time */) :-
-          node(6)(C, U, lock, N, chan, sender, origin, id, slot, c),
-      (C - c <= slot_time) :-
-          node(4)(C, U, lock, N, chan, sender, origin, id, slot, c),
-      (C - c <= slot_time) :-
-          node(5)(C, U, lock, N, chan, sender, origin, id, slot, c)
-    )
-
-    val assertions = List(
-           false :- (node(4)(C, U, lock, N, chan, sender, origin, id, slot, c),
-                     node(4)(C, U, lock, N, chan, sender, origin, id2, slotn, cn),
-                     id > 0, id <= N, id2 > 0, id2 <= N, slot < slotn) 
-/*             false :- (node(1)(C, U, lock, N, chan, sender, origin, id, slot, c),
-                       node(4)(C, U, lock, N, chan, sender, origin, id2, slotn, cn)) */
-    )
-
-    val system = System(List((nodeProcess, Infinite)),
-                        7, None, DiscreteTime(0), timeInvs, assertions)
-
-    if (tta3Flag)
+    if (tta2FlagB)
       new VerificationLoop(system)
   }
 
