@@ -27,7 +27,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package hornconcurrency
+package hornconcurrency.experiments
+
+import hornconcurrency._
 
 import ap.parser._
 import lazabs.horn.bottomup.{HornClauses, HornPredAbs}
