@@ -35,29 +35,39 @@ object TimedTransducer {
     override def toString : String = label
   }
 
-  final case class InputLabel(label : String) {
+  sealed trait Label {
+    def label: String
+  }
+
+  final case class InputLabel(label : String) extends Label {
     override def toString : String = label
   }
 
-  final case class OutputLabel(label : String) {
+  final case class OutputLabel(label : String) extends Label {
     override def toString : String = label
+  }
+
+  sealed trait Formula[+A <: Label]
+  object Formula {
+    case object True extends Formula[Nothing]
+    case object False extends Formula[Nothing]
+    final case class Atom[A <: Label](value: A) extends Formula[A]
+    final case class Not[A <: Label](arg: Formula[A]) extends Formula[A]
+    final case class And[A <: Label](args: Seq[Formula[A]]) extends Formula[A]
+    final case class Or[A <: Label](args: Seq[Formula[A]]) extends Formula[A]
   }
 
   sealed trait ClockConstraint {
-    def &&(other: ClockConstraint) : ClockConstraint = {
-        ClockConstraint.and(this, other)
-    }
+    def &&(other: ClockConstraint): ClockConstraint = ClockConstraint.and(this, other)
   }
-
   object ClockConstraint {
-
-    final case object True extends ClockConstraint {}
+    final case object True extends ClockConstraint
 
     sealed trait Relation {
         def symbol: String
     }
 
-    final case object Le extends Relation {
+    final case object Lt extends Relation {
         val symbol = "<"
     }
 
@@ -65,7 +75,7 @@ object TimedTransducer {
         val symbol = "<="
     }
 
-    final case object Ge extends Relation {
+    final case object Gt extends Relation {
         val symbol = ">"
     }
 
@@ -94,12 +104,16 @@ object TimedTransducer {
             case Conjunction(s) => s 
         })
 
-        Conjunction(s)
+        s match {
+            case Seq() => True
+            case Seq(singleton) => singleton
+            case conj => Conjunction(conj)
+        }
     }
   }
 
-  final case class SignalLabel(input : Seq[InputLabel],
-                               output: Seq[OutputLabel]) {
+  final case class SignalLabel(input : Formula[InputLabel],
+                               output: Formula[OutputLabel]) {
   }
 
   final case class Location(label : String,
@@ -112,13 +126,14 @@ object TimedTransducer {
                               target: Location,
                               signalLabel: SignalLabel,
                               guard: ClockConstraint,
-                              resetInstruction: Set[Clock]) {
+                              resetInstruction: Seq[Clock]) {
   }
-}
 
-class TimedTransducer(locations: TimedTransducer.Location,
-                      initial_location: TimedTransducer.Location,
-                      transitions: Seq[TimedTransducer.Transition]
-                      ) {
-
+  case class TimedTransducer(name:String,
+                             locations: Seq[Location],
+                             initialLocation: Location,
+                             clocks: Seq[Clock],
+                             inputLabels: Seq[InputLabel],
+                             outputLabels: Seq[OutputLabel],
+                             transitions: Seq[Transition])
 }
