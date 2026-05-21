@@ -191,7 +191,7 @@ object TimedTransducerEncoder {
 
     
     def encode_step(et: EncodedTransducer): IAtom = {
-        val pred_args: Seq[ITerm] = 
+        val pred_args: Seq[ConstantTerm] =
             Seq(C) ++
             Seq(et.src) ++
             Seq(et.target) ++
@@ -203,7 +203,7 @@ object TimedTransducerEncoder {
     }
 
     def encode_invariant(et: EncodedTransducer): IAtom = {
-        val pred_args: Seq[ITerm] = 
+        val pred_args: Seq[ConstantTerm] =
             Seq(C) ++
             Seq(et.src) ++
             et.input_label_terms ++
