@@ -128,17 +128,16 @@ object SignalSystem {
           // c - eps >= 0  <=>  c > 0
           ShortCutResult(lt(zero, newTerm))
       }
+      case LeafFormula(t) if !ContainsSymbol.freeFromConstants(t, Set(const)) =>
+        throw new Exception(
+          "can only substitute with epsilon in the context of inequalities")
       case _ => {
         super.preVisit(t, arg)
       }
     }
 
-    def postVisit(t : IExpression, arg : Unit, subres : Seq[IExpression]) = {
-      if (t == i(const))
-        throw new Exception(
-          "can only substitute with epsilon in the context of inequalities")
+    def postVisit(t : IExpression, arg : Unit, subres : Seq[IExpression]) =
       t update subres
-    }
   }
 
 }
