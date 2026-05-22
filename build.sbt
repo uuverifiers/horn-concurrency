@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "2.2.1",
+  version := "2.3",
   scalaVersion := "2.11.12",
   crossScalaVersions := Seq("2.11.12", "2.12.21"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
@@ -27,14 +27,15 @@ lazy val commonSettings = Seq(
   publishTo := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )))
 )
 
-assembly / test := {}
-
 // Project
 
 lazy val root = (project in file(".")).
   settings(commonSettings: _*).
 
 settings(
+  assembly / test := {},
+  Test / parallelExecution := false,
+
   Compile / scalacOptions ++=
     List("-feature",
          "-language:implicitConversions,postfixOps,reflectiveCalls"),
@@ -42,8 +43,8 @@ settings(
                                         case "2.11.12" => "-optimise"
                                         case "2.12.21" => "-opt:_"
                                       }}).value,
-  resolvers += "uuverifiers" at "https://eldarica.org/maven/",
+//  resolvers += "uuverifiers" at "https://eldarica.org/maven/",
   libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.0" % "test",
-  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.2.1"
+  libraryDependencies += "io.github.uuverifiers" %% "eldarica" % "2.3"
 //  libraryDependencies += "uuverifiers" %% "eldarica" % "nightly-SNAPSHOT"
 )
