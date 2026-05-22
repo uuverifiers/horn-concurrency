@@ -70,6 +70,43 @@ object TimedTransducerEncoder {
     // global clock
     val C = Rationals.dom.newConstant("C")
 
+
+    // //Code waiting for transducerequation to be defined
+    // // Should return a set of Horn clauses
+    // def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): Unit = {
+    //     val ets = teq match {
+    //         case TimedTransducer.Product(t1, t2) => {
+    //             val et1 = encodeTransducerEquation(t1)
+    //             val et2 = encodeTransducerEquation(t2)
+    //             et1 ++ et2
+    //         }
+    //         case TimedTransducer.Sequential => {
+    //             val t1_proj = t1.copy(
+    //                 locations = t1.locations.map(l => 
+    //                     l.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //                 ),
+    //                 transitions = t1.transitions.map(t => 
+    //                     t.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //                 )
+    //             )
+    //             val t2_proj = t2.copy(
+    //                 locations = t2.locations.map(l => 
+    //                     l.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //                 ),
+    //                 transitions = t2.transitions.map(t => 
+    //                     t.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //                 )
+    //             )
+    //             val et1 = encodeTransducerEquation(t1_proj)
+    //             val et2 = encodeTransducerEquation(t2_proj)
+    //             et1 ++ et2
+    //         }
+    //     }
+    //     val horn_clauses = encodeTransducerProduct(ets)
+    //     horn_clauses
+    // }
+
+
     def encodeTransducerProduct(
         transducers: Seq[TimedTransducer.TimedTransducer]
     ): Unit = {
@@ -79,6 +116,16 @@ object TimedTransducerEncoder {
         }
 
         val loc_sorts = encoded_transducers.map(_.adt.sorts(0))
+        // val new_ADT = new ADT(List("Loc"), 
+        //     encoded_transducers.map(_.adt.sorts).flatMap(sl => 
+        //         sl.map(ps => 
+        //         (ps.name, ADT.CtorSignature(List(), ADT.ADTSort(0))))
+        //     )
+        // )
+        // val loc_sorts = new_ADT.sorts
+        
+        // locs.map(l => (prefix + l.label, ADT.CtorSignature(List(), ADT.ADTSort(0))))
+
 
 
         
@@ -172,26 +219,32 @@ object TimedTransducerEncoder {
             println(trans)
         }
 
+        //TODO: Emit the clauses
+
         // Sequential composition:
         // If Q1 = P2 and P1 \cap Q2 = \emptyset, then
         // for each p in Q1 \cup Q2, in each label \alpha, replace \alpha with \exists q. \alpha[p/q].
-
-        // EncodedTransducer(prefix + transducer.name,
-        //             LocADT,
-        //             funApps(transducer.initialLocation),
-        //             s, sp,
-        //             Seq(p), Seq(q),
-        //             Seq(c1),
-        //             Seq(c1p), Seq(c1r),
-        //             inv, invariants,
-        //             step, steps)
+        // val name = "Prod__" + transducers.map(_.name).mkString("_")
+        // EncodedTransducer(
+        //     name,
+        //     new_ADT,
+        //     funApps(transducer.initialLocation),
+        //     s, sp,
+        //     Seq(p), Seq(q),
+        //     Seq(c1),
+        //     Seq(c1p), Seq(c1r),
+        //     inv, invariants,
+        //     step, 
+        //     transitions
+        // )
 
         ???
     }
 
+
     
     def encode_step(et: EncodedTransducer): IAtom = {
-        val pred_args: Seq[ConstantTerm] =
+        val pred_args: Seq[ConstantTerm] = 
             Seq(C) ++
             Seq(et.src) ++
             Seq(et.target) ++
@@ -203,7 +256,7 @@ object TimedTransducerEncoder {
     }
 
     def encode_invariant(et: EncodedTransducer): IAtom = {
-        val pred_args: Seq[ConstantTerm] =
+        val pred_args: Seq[ConstantTerm] = 
             Seq(C) ++
             Seq(et.src) ++
             et.input_label_terms ++
