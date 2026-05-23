@@ -71,38 +71,42 @@ object TimedTransducerEncoder {
     val C = Rationals.dom.newConstant("C")
 
 
-    // //Code waiting for transducerequation to be defined
-    // // Should return a set of Horn clauses
+    //Code waiting for transducerequation to be defined
+    // Should return a set of Horn clauses
     // def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): Unit = {
-    //     val ets = teq match {
-    //         case TimedTransducer.Product(t1, t2) => {
-    //             val et1 = encodeTransducerEquation(t1)
-    //             val et2 = encodeTransducerEquation(t2)
-    //             et1 ++ et2
-    //         }
-    //         case TimedTransducer.Sequential => {
-    //             val t1_proj = t1.copy(
-    //                 locations = t1.locations.map(l => 
-    //                     l.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
-    //                 ),
-    //                 transitions = t1.transitions.map(t => 
-    //                     t.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //     def _transducerEquationToTransducers(teq: TimedTransducer.TimedTransducerEquation): Seq[TimedTransducer.TimedTransducer] = {
+    //         teq match {
+    //             case TimedTransducer.Base(t) => Seq(t)
+    //             case TimedTransducer.Product(t1, t2) => {
+    //                 val et1 = encodeTransducerEquation(t1)
+    //                 val et2 = encodeTransducerEquation(t2)
+    //                 et1 ++ et2
+    //             }
+    //             case TimedTransducer.Sequential => {
+    //                 val t1_proj = t1.copy(
+    //                     locations = t1.locations.map(l => 
+    //                         l.copy(signalLabel = SignalLabel(l.signalLabel.input, Formula.True))
+    //                     ),
+    //                     transitions = t1.transitions.map(t => 
+    //                         t.copy(signalLabel = SignalLabel(l.signalLabel.input, Formula.True))
+    //                     )
     //                 )
-    //             )
-    //             val t2_proj = t2.copy(
-    //                 locations = t2.locations.map(l => 
-    //                     l.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
-    //                 ),
-    //                 transitions = t2.transitions.map(t => 
-    //                     t.copy(signalLabel = SignalLabel(Formula.True, Formula.True))
+    //                 val t2_proj = t2.copy(
+    //                     locations = t2.locations.map(l => 
+    //                         l.copy(signalLabel = SignalLabel(Formula.True, l.signalLabel.output))
+    //                     ),
+    //                     transitions = t2.transitions.map(t => 
+    //                         t.copy(signalLabel = SignalLabel(Formula.True, l.signalLabel.output))
+    //                     )
     //                 )
-    //             )
-    //             val et1 = encodeTransducerEquation(t1_proj)
-    //             val et2 = encodeTransducerEquation(t2_proj)
-    //             et1 ++ et2
+    //                 val et1 = encodeTransducerEquation(t1_proj)
+    //                 val et2 = encodeTransducerEquation(t2_proj)
+    //                 et1 ++ et2
+    //             }
     //         }
     //     }
-    //     val horn_clauses = encodeTransducerProduct(ets)
+    //     transducers = _transducerEquationToTransducers(teq)
+    //     val horn_clauses = encodeTransducerProduct(transducers)
     //     horn_clauses
     // }
 
