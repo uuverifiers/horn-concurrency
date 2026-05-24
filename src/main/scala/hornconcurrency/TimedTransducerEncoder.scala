@@ -73,7 +73,10 @@ object TimedTransducerEncoder {
 
     // Code waiting for transducerequation to be defined
     // Should return a set of Horn clauses
-    def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): Unit = {
+    def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): 
+        Seq[(lazabs.horn.bottomup.HornClauses.Clause, 
+            Seq[ap.parser.IAtom], Seq[Seq[ap.parser.IFormula]], 
+            hornconcurrency.System.NoSync.type)] = {
         
         //Converts sequenctial composition to product, returns a list of all base transducers that should be composed woht product
         def seq_to_prod(teq: TimedTransducer.TimedTransducerEquation, proj_input: Boolean = false, proj_output: Boolean = false): 
@@ -105,10 +108,12 @@ object TimedTransducerEncoder {
         horn_clauses
     }
 
-
+    // Not sure about the return type
     def encodeTransducerProduct(
         transducers: Seq[TimedTransducer.TimedTransducer]
-    ): Unit = {
+    ): Seq[(lazabs.horn.bottomup.HornClauses.Clause, 
+            Seq[ap.parser.IAtom], Seq[Seq[ap.parser.IFormula]], 
+            hornconcurrency.System.NoSync.type)] = {
 
         val encoded_transducers = transducers.zipWithIndex.map {
             case (transducer, i) => encodeTransducer(transducer, s"T$i")
@@ -238,8 +243,6 @@ object TimedTransducerEncoder {
         //     step, 
         //     transitions
         // )
-
-        ???
     }
 
 
