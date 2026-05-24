@@ -136,4 +136,12 @@ object TimedTransducer {
                              inputLabels: Seq[InputLabel],
                              outputLabels: Seq[OutputLabel],
                              transitions: Seq[Transition])
+
+  sealed trait TimedTransducerEquation
+  case class Base(t: TimedTransducer) extends TimedTransducerEquation
+  case class Product(t1: TimedTransducerEquation, t2: TimedTransducerEquation)
+    extends TimedTransducerEquation
+  case class Sequential(t1: TimedTransducerEquation, t2: TimedTransducerEquation)
+    extends TimedTransducerEquation
 }
+

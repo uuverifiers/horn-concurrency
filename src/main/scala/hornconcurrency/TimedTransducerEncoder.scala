@@ -71,44 +71,39 @@ object TimedTransducerEncoder {
     val C = Rationals.dom.newConstant("C")
 
 
-    //Code waiting for transducerequation to be defined
+    // Code waiting for transducerequation to be defined
     // Should return a set of Horn clauses
-    // def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): Unit = {
-    //     def _transducerEquationToTransducers(teq: TimedTransducer.TimedTransducerEquation): Seq[TimedTransducer.TimedTransducer] = {
-    //         teq match {
-    //             case TimedTransducer.Base(t) => Seq(t)
-    //             case TimedTransducer.Product(t1, t2) => {
-    //                 val et1 = encodeTransducerEquation(t1)
-    //                 val et2 = encodeTransducerEquation(t2)
-    //                 et1 ++ et2
-    //             }
-    //             case TimedTransducer.Sequential => {
-    //                 val t1_proj = t1.copy(
-    //                     locations = t1.locations.map(l => 
-    //                         l.copy(signalLabel = SignalLabel(l.signalLabel.input, Formula.True))
-    //                     ),
-    //                     transitions = t1.transitions.map(t => 
-    //                         t.copy(signalLabel = SignalLabel(l.signalLabel.input, Formula.True))
-    //                     )
-    //                 )
-    //                 val t2_proj = t2.copy(
-    //                     locations = t2.locations.map(l => 
-    //                         l.copy(signalLabel = SignalLabel(Formula.True, l.signalLabel.output))
-    //                     ),
-    //                     transitions = t2.transitions.map(t => 
-    //                         t.copy(signalLabel = SignalLabel(Formula.True, l.signalLabel.output))
-    //                     )
-    //                 )
-    //                 val et1 = encodeTransducerEquation(t1_proj)
-    //                 val et2 = encodeTransducerEquation(t2_proj)
-    //                 et1 ++ et2
-    //             }
-    //         }
-    //     }
-    //     transducers = _transducerEquationToTransducers(teq)
-    //     val horn_clauses = encodeTransducerProduct(transducers)
-    //     horn_clauses
-    // }
+    def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): Unit = {
+        
+        //Converts sequenctial composition to product, returns a list of all base transducers that should be composed woht product
+        def seq_to_prod(teq: TimedTransducer.TimedTransducerEquation, proj_input: Boolean = false, proj_output: Boolean = false): 
+                Seq[TimedTransducer.TimedTransducer] = {
+            teq match {
+                case TimedTransducer.Base(t) => 
+                    val locs = t.locations.map(l => 
+                        l.copy(signalLabel = TimedTransducer.SignalLabel(
+                            if (proj_input) Formula.True else l.signalLabel.input, 
+                            if (proj_output) Formula.True else l.signalLabel.output
+                        ))
+                    )
+                    val transitions = t.transitions.map(tr => 
+                        tr.copy(signalLabel = TimedTransducer.SignalLabel(
+                            if (proj_input) Formula.True else tr.signalLabel.input, 
+                            if (proj_output) Formula.True else tr.signalLabel.output
+                        ))
+                    )
+                    Seq(t.copy(locations = locs, transitions = transitions))
+                case TimedTransducer.Product(t1, t2) => 
+                    seq_to_prod(t1, proj_input, proj_output) ++ seq_to_prod(t2, proj_input, proj_output)
+                case TimedTransducer.Sequential(t1, t2) => 
+                        seq_to_prod(t1, true, proj_output) ++
+                        seq_to_prod(t2, proj_input, true)
+            }
+        }
+        val transducers = seq_to_prod(teq)
+        val horn_clauses = encodeTransducerProduct(transducers)
+        horn_clauses
+    }
 
 
     def encodeTransducerProduct(
@@ -222,6 +217,8 @@ object TimedTransducerEncoder {
         for (trans <- transitions) {
             println(trans)
         }
+
+        transitions
 
         //TODO: Emit the clauses
 
