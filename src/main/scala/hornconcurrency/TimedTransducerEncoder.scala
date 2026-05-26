@@ -57,15 +57,15 @@ object TimedTransducerEncoder {
                                  initialLocation: IFunApp,
                                  src: ConstantTerm,
                                  target: ConstantTerm,
-                                 input_label_terms: Seq[ConstantTerm],
-                                 output_labels_terms: Seq[ConstantTerm],
-                                 clock_terms: Seq[ConstantTerm],
-                                 new_clock_terms: Seq[ConstantTerm],
+                                 inputLabelTerms: Seq[ConstantTerm],
+                                 outputLabelsTerms: Seq[ConstantTerm],
+                                 clockTerms: Seq[ConstantTerm],
+                                 newClockTerms: Seq[ConstantTerm],
                                  resetFlags: Seq[ConstantTerm],
-                                 inv_pred: Predicate,
-                                 invariant_clauses: Seq[(HornClauses.Clause, NoSync.type)],
-                                 step_pred: Predicate,
-                                 step_clauses: Seq[(HornClauses.Clause, NoSync.type)])
+                                 invPred: Predicate,
+                                 invariantClauses: Seq[(HornClauses.Clause, NoSync.type)],
+                                 stepPred: Predicate,
+                                 stepClauses: Seq[(HornClauses.Clause, NoSync.type)])
 
     // global clock
     val C = Rationals.dom.newConstant("C")
@@ -75,7 +75,7 @@ object TimedTransducerEncoder {
             hornconcurrency.System.NoSync.type)]= {
         
         //Converts sequenctial composition to product, returns a list of all base transducers that should be composed woht product
-        def seq_to_prod(teq: TimedTransducer.TimedTransducerEquation, proj_input: Boolean = false, proj_output: Boolean = false): 
+        def seqToProd(teq: TimedTransducer.TimedTransducerEquation, proj_input: Boolean = false, proj_output: Boolean = false):
                 Seq[TimedTransducer.TimedTransducer] = {
             teq match {
                 case TimedTransducer.Base(t) => 
@@ -93,65 +93,64 @@ object TimedTransducerEncoder {
                     )
                     Seq(t.copy(locations = locs, transitions = transitions))
                 case TimedTransducer.Product(t1, t2) => 
-                    seq_to_prod(t1, proj_input, proj_output) ++ seq_to_prod(t2, proj_input, proj_output)
+                    seqToProd(t1, proj_input, proj_output) ++ seqToProd(t2, proj_input, proj_output)
                 case TimedTransducer.Sequential(t1, t2) => 
-                        seq_to_prod(t1, true, proj_output) ++
-                        seq_to_prod(t2, proj_input, true)
+                        seqToProd(t1, true, proj_output) ++
+                        seqToProd(t2, proj_input, true)
             }
         }
-        val transducers = seq_to_prod(teq)
-        val horn_clauses = encodeTransducerProduct(transducers)
-        horn_clauses
+        val transducers = seqToProd(teq)
+        val hornClauses = encodeTransducerProduct(transducers)
+        hornClauses
     }
 
-    // Not sure about the return type
     def encodeTransducerProduct(
         transducers: Seq[TimedTransducer.TimedTransducer]
     ): Seq[(lazabs.horn.bottomup.HornClauses.Clause,
             hornconcurrency.System.NoSync.type)] = {
 
-        val encoded_transducers = transducers.zipWithIndex.map {
+        val encodedTransducers = transducers.zipWithIndex.map {
             case (transducer, i) => encodeTransducer(transducer, s"T$i")
         }
 
-        val loc_sorts = encoded_transducers.map(_.adt.sorts(0))
+        val locSorts = encodedTransducers.map(_.adt.sorts(0))
         // val new_ADT = new ADT(List("Loc"), 
-        //     encoded_transducers.map(_.adt.sorts).flatMap(sl => 
+        //     encodedTransducers.map(_.adt.sorts).flatMap(sl => 
         //         sl.map(ps => 
         //         (ps.name, ADT.CtorSignature(List(), ADT.ADTSort(0))))
         //     )
         // )
-        // val loc_sorts = new_ADT.sorts
+        // val locSorts = new_ADT.sorts
 
         // locs.map(l => (prefix + l.label, ADT.CtorSignature(List(), ADT.ADTSort(0))))
 
-        val conf_disc_sort_args = createPredicateArgSorts(encoded_transducers, loc_sorts)
-        val conf_time_sort_args = createPredicateArgSorts(encoded_transducers, loc_sorts)
+        val confDiscSortArgs = createPredicateArgSorts(encodedTransducers, locSorts)
+        val confTimeSortArgs = createPredicateArgSorts(encodedTransducers, locSorts)
 
-        val conf_disc = MonoSortedPredicate("Discrete Configuration", conf_disc_sort_args)
-        val conf_time = MonoSortedPredicate("Timed Configuration", conf_time_sort_args)
+        val confDisc = MonoSortedPredicate("Discrete Configuration", confDiscSortArgs)
+        val confTime = MonoSortedPredicate("Timed Configuration", confTimeSortArgs)
 
-        val encoded_initial_location_terms =
-            encoded_transducers.map(_.initialLocation: ITerm)
-        val encoded_input_label_terms =
-            encoded_transducers.flatMap(_.input_label_terms: Seq[ITerm])
-        val encoded_output_label_terms =
-            encoded_transducers.flatMap(_.output_labels_terms: Seq[ITerm])
-        val encoded_clock_terms =
-            encoded_transducers.flatMap(_.clock_terms: Seq[ITerm])
+        val encodedInitialLocationTerms =
+            encodedTransducers.map(_.initialLocation: ITerm)
+        val encodedInputLabelTerms =
+            encodedTransducers.flatMap(_.inputLabelTerms: Seq[ITerm])
+        val encodedOutputLabelTerms =
+            encodedTransducers.flatMap(_.outputLabelsTerms: Seq[ITerm])
+        val encodedClockTerms =
+            encodedTransducers.flatMap(_.clockTerms: Seq[ITerm])
 
-        val encoded_labels = encoded_input_label_terms ++ encoded_output_label_terms
-        val conf_disc_args = 
+        val encodedLabels = encodedInputLabelTerms ++ encodedOutputLabelTerms
+        val confDiscArgs =
             Seq(C: ITerm) ++
-            encoded_initial_location_terms ++ encoded_labels ++ encoded_clock_terms
-        val conf_time_args = 
+            encodedInitialLocationTerms ++ encodedLabels ++ encodedClockTerms
+        val confTimeArgs =
             Seq(C: ITerm) ++
-            encoded_initial_location_terms ++ encoded_labels ++ encoded_clock_terms
+            encodedInitialLocationTerms ++ encodedLabels ++ encodedClockTerms
 
-        val initial_clause = (conf_disc(conf_disc_args: _*) :- true, NoSync)
+        val initialClause = (confDisc(confDiscArgs: _*) :- true, NoSync)
 
-        val head = conf_disc(conf_disc_args: _*)
-        val body = Seq(conf_time(conf_time_args: _*)) ++ encoded_transducers.map(encode_invariant)
+        val head = confDisc(confDiscArgs: _*)
+        val body = Seq(confTime(confTimeArgs: _*)) ++ encodedTransducers.map(encodeInvariant)
 
         val pureTimeStepClause =
             (head :-
@@ -165,44 +164,44 @@ object TimedTransducerEncoder {
         val globalTransitionClauses = subsets.map { subset =>
             // In subset => discrete transition,
             // Not in subset => time transition
-            val conf_disc_args = 
+            val confDiscArgs = 
                 Seq(C: ITerm) ++
-                (encoded_transducers.zipWithIndex.map {
+                (encodedTransducers.zipWithIndex.map {
                     case (ec, i) if subset(i) => ec.target
                     case (ec, i) => ec.src
                 }: Seq[ITerm]) ++
-                encoded_labels ++
-                (encoded_transducers.zipWithIndex.flatMap {
-                    case (ec, i) if subset(i) => ec.new_clock_terms
-                    case (ec, i) => ec.clock_terms
+                encodedLabels ++
+                (encodedTransducers.zipWithIndex.flatMap {
+                    case (ec, i) if subset(i) => ec.newClockTerms
+                    case (ec, i) => ec.clockTerms
                 }: Seq[ITerm]) 
 
-            val head = conf_disc(conf_disc_args: _*)
+            val head = confDisc(confDiscArgs: _*)
 
-            val conf_time_args = 
+            val confTimeArgs = 
                 Seq(C: ITerm) ++
-                encoded_transducers.map(_.src: ITerm) ++
-                encoded_labels ++
-                encoded_transducers.flatMap(_.clock_terms: Seq[ITerm])
+                encodedTransducers.map(_.src: ITerm) ++
+                encodedLabels ++
+                encodedTransducers.flatMap(_.clockTerms: Seq[ITerm])
 
             val actions = 
-                encoded_transducers.zipWithIndex.map {
-                    case (ec, i) if subset(i) => encode_step(ec)
-                    case (ec, i) => encode_invariant(ec)
+                encodedTransducers.zipWithIndex.map {
+                    case (ec, i) if subset(i) => encodeStep(ec)
+                    case (ec, i) => encodeInvariant(ec)
                 }
             val resetClauses =
-                encoded_transducers.zipWithIndex.filter {
+                encodedTransducers.zipWithIndex.filter {
                     case (_, i) => subset(i) 
                 }.map{
                     case(ec, _) =>
-                        ec.resetFlags.zip(ec.clock_terms).zip(ec.new_clock_terms).map {
+                        ec.resetFlags.zip(ec.clockTerms).zip(ec.newClockTerms).map {
                             case ((cr, cp), c) =>
                                 ((cr === True) ==> (cp === C)) & ((cr === False) ==> (cp === c))
                         }
                 }.flatten
 
             val body = 
-                Seq(conf_time(conf_time_args: _*)) ++
+                Seq(confTime(confTimeArgs: _*)) ++
                 actions ++
                 resetClauses
 
@@ -213,40 +212,40 @@ object TimedTransducerEncoder {
             transitionClause
         }
 
-        Seq(initial_clause, pureTimeStepClause) ++
-        encoded_transducers.flatMap(_.invariant_clauses) ++
-        encoded_transducers.flatMap(_.step_clauses) ++
+        Seq(initialClause, pureTimeStepClause) ++
+        encodedTransducers.flatMap(_.invariantClauses) ++
+        encodedTransducers.flatMap(_.stepClauses) ++
         globalTransitionClauses
     }
 
-    def createPredicateArgSorts(ecs: Seq[EncodedTransducer], loc_sorts: Seq[Sort]): Seq[Sort] = {
+    def createPredicateArgSorts(ecs: Seq[EncodedTransducer], locSorts: Seq[Sort]): Seq[Sort] = {
         Seq(Rationals.dom) ++
-        loc_sorts ++
-        ecs.flatMap(_.input_label_terms.map(_ => Sort.Bool)) ++
-        ecs.flatMap(_.output_labels_terms.map(_ => Sort.Bool)) ++
-        ecs.flatMap(_.clock_terms.map(_ => Rationals.dom))
+        locSorts ++
+        ecs.flatMap(_.inputLabelTerms.map(_ => Sort.Bool)) ++
+        ecs.flatMap(_.outputLabelsTerms.map(_ => Sort.Bool)) ++
+        ecs.flatMap(_.clockTerms.map(_ => Rationals.dom))
     }
     
-    def encode_step(et: EncodedTransducer): IFormula = {
+    def encodeStep(et: EncodedTransducer): IFormula = {
         val pred_args: Seq[ConstantTerm] = 
             Seq(C) ++
             Seq(et.src) ++
             Seq(et.target) ++
-            et.input_label_terms ++
-            et.output_labels_terms ++
-            et.clock_terms ++
+            et.inputLabelTerms ++
+            et.outputLabelsTerms ++
+            et.clockTerms ++
             et.resetFlags
-        et.step_pred(pred_args: _*)
+        et.stepPred(pred_args: _*)
     }
 
-    def encode_invariant(et: EncodedTransducer): IFormula = {
+    def encodeInvariant(et: EncodedTransducer): IFormula = {
         val pred_args: Seq[ConstantTerm] = 
             Seq(C) ++
             Seq(et.src) ++
-            et.input_label_terms ++
-            et.output_labels_terms ++
-            et.clock_terms
-        et.inv_pred(pred_args: _*)
+            et.inputLabelTerms ++
+            et.outputLabelsTerms ++
+            et.clockTerms
+        et.invPred(pred_args: _*)
     }
 
     def encodeTransducer(
