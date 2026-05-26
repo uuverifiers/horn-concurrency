@@ -65,7 +65,9 @@ object TimedTransducerEncoder {
                                  invPred: Predicate,
                                  invariantClauses: Seq[(HornClauses.Clause, NoSync.type)],
                                  stepPred: Predicate,
-                                 stepClauses: Seq[(HornClauses.Clause, NoSync.type)]
+                                 stepClauses: Seq[(HornClauses.Clause, NoSync.type)],
+                                acceptPred: Predicate,
+                                acceptClauses: Seq[HornClauses.Clause]
                                  )
 
     // global clock
@@ -272,8 +274,7 @@ object TimedTransducerEncoder {
                 Sort.Bool, Sort.Bool, // local input and output signals
                 Rationals.dom, // global clock
                 Rationals.dom, // local clock
-                Sort.Bool, // local reset instruction
-                Sort.Bool // local acceptance condition
+                Sort.Bool // local reset instruction
             ))
 
         val s = locSort.newConstant(prefix + "s")
@@ -309,7 +310,6 @@ object TimedTransducerEncoder {
                      encodeClockConstraint(l.invariant, c1, C)),
                      NoSync)
         )
-
         // (step(FSi, FS0, u, q, C, c1, c2, False) :- (q === True),
         // NoSync),
         // (step(FSi, FS1, u, q, C, c1, c2, True) :- (q === False),
@@ -322,17 +322,37 @@ object TimedTransducerEncoder {
         // NoSync),
         // (step(FS0, FS1, u, q, C, c1, c2, True) :- (q === False),
         // NoSync),
+        
+
+        
         val steps = 
         transducer.transitions.map(
             t => (step(funApps(t.source.label), funApps(t.target.label), p, q, C, c1,
-                        encodeClockReset(t.resetInstruction.isEmpty),
-                        encodeAccept(t, transducer.acceptanceCondition)) :-
+                        encodeClockReset(t.resetInstruction.isEmpty)) :-
                     (encodeFormula(t.signalLabel.input, signal_environment) &
                      encodeFormula(t.signalLabel.output, signal_environment) &
                      encodeClockConstraint(t.guard, c1, C)),
                      NoSync)
         )  
 
+                // The argument is the index of the acceptance set
+        val acceptPred = MonoSortedPredicate(prefix + "Accept",List(Sort.Integer))
+            /* For each acceptance set with index idx,
+       acceptPred(idx) holds if the current transition or target location is 
+       in the acceptance set. */ 
+        val acceptClauses = transducer.acceptanceCondition.zipWithIndex.flatMap {
+            case ((locations, transitions), idx) => {
+                //TODO: optimize by not including transitions that are already included by the location clauses
+                val loc_clauses = locations.map(l => 
+                    acceptPred(idx) :- step(s, funApps(l.label), p, q, C, c1, c1r)
+                ) 
+                val trans_clauses = transitions.map(t => 
+                    acceptPred(idx) :- step(funApps(t.source.label), 
+                                        funApps(t.target.label), p, q, C, c1, c1r)
+                )
+                loc_clauses ++ trans_clauses
+            }
+        }
 
         // TODO: implement global transitions
         EncodedTransducer(prefix + transducer.name,
@@ -343,19 +363,12 @@ object TimedTransducerEncoder {
                           Seq(c1),
                           Seq(c1p), Seq(c1r),
                           inv, invariants,
-                          step, steps)
+                          step, steps,
+                          acceptPred, acceptClauses)
     }
 
 
-    def encodeAccept( //NOTE: assumes only one acceptance condition for a base transducer
-        transition: TimedTransducer.Transition,
-        acceptanceCondition: Seq[(Seq[Location], Seq[TimedTransducer.Transition])],
-    ): IFunApp = {
-        val acceptingIdxs = acceptanceCondition.zipWithIndex.collect {
-            case ((locations, transitions), idx) if (transitions.contains(transition) || locations.contains(transition.target)) => idx
-        }
-        if (acceptingIdxs.isEmpty) False else True
-    }
+
 
     def encodeClockReset(reset: Boolean) : IFunApp = {
         if (reset) False else True
