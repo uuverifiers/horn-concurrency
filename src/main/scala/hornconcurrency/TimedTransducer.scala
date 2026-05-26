@@ -31,6 +31,14 @@ package hornconcurrency
 
 object TimedTransducer {
 
+  sealed trait BaseTransducerKind
+  case object BoolNot extends BaseTransducerKind
+  case object BoolOr extends BaseTransducerKind
+  case object Future extends BaseTransducerKind
+  case object Past extends BaseTransducerKind
+  case object Until extends BaseTransducerKind
+  case object Since extends BaseTransducerKind
+
   final case class Clock(label : String) {
     override def toString : String = label
   }
@@ -143,5 +151,242 @@ object TimedTransducer {
     extends TimedTransducerEquation
   case class Sequential(t1: TimedTransducerEquation, t2: TimedTransducerEquation)
     extends TimedTransducerEquation
-}
 
+  def baseTransducer(kind: BaseTransducerKind,
+                     input: Any,
+                     output: Any,
+                     const: Int): TimedTransducer =
+    baseTransducer(kind, Seq(input), output, const)
+
+  def baseTransducer(kind: BaseTransducerKind,
+                     inputs: Seq[Any],
+                     output: Any,
+                     const: Int): TimedTransducer = {
+    import ClockConstraint._
+    import Formula._
+
+    def inputName(i: Int): String = inputs(i).toString
+    def inLabel(i: Int): InputLabel = InputLabel(inputName(i))
+    val outputLabel = OutputLabel(output.toString)
+    val c = Clock("c")
+    val a = const
+
+    val q = Atom(outputLabel)
+    val notQ = Not(q)
+
+    def u(s: String): Formula[InputLabel] = Atom(InputLabel(s))
+    def notU(s: String): Formula[InputLabel] = Not(u(s))
+    def andIn(args: Formula[InputLabel]*): Formula[InputLabel] = And(args)
+    def orIn(args: Formula[InputLabel]*): Formula[InputLabel] = Or(args)
+    def loc(label: String,
+            input: Formula[InputLabel],
+            output: Formula[OutputLabel],
+            invariant: ClockConstraint = ClockConstraint.True): Location =
+      Location(label, SignalLabel(input, output), invariant)
+    def trans(source: Location,
+              target: Location,
+              input: Formula[InputLabel],
+              output: Formula[OutputLabel],
+              guard: ClockConstraint = ClockConstraint.True,
+              reset: Boolean = false): Transition =
+      Transition(source, target, SignalLabel(input, output), guard,
+        if (reset) Seq(c) else Seq.empty)
+
+    val si = loc("Si", Formula.True, Formula.True)
+
+    // refactor later...
+    kind match {
+      case BoolNot =>
+        val input = inputName(0)
+        val inputLabel = InputLabel(input)
+        val s0 = loc("S0", u(input), notQ)
+        val s1 = loc("S1", notU(input), q)
+        val locations = Seq(si, s0, s1)
+
+        TimedTransducer(
+          "NotTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq.empty,
+          Seq(inputLabel),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, u(input), notQ),
+            trans(si, s1, notU(input), q),
+            trans(s0, s0, u(input), notQ),
+            trans(s0, s1, notU(input), q),
+            trans(s1, s0, u(input), notQ),
+            trans(s1, s1, notU(input), q)
+          ))
+
+      case BoolOr =>
+        val input1 = inputName(0)
+        val inputLabel1 = InputLabel(input1)
+        val input2 = inputName(1)
+        val inputLabel2 = InputLabel(input2)
+        val inputTrue = orIn(u(input1), u(input2))
+        val inputFalse = andIn(notU(input1), notU(input2))
+        val s0 = loc("S0", inputTrue, q)
+        val s1 = loc("S1", inputFalse, notQ)
+        val locations = Seq(si, s0, s1)
+
+        TimedTransducer(
+          "OrTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq.empty,
+          Seq(inputLabel1, inputLabel2),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, inputTrue, q),
+            trans(si, s1, inputFalse, notQ),
+            trans(s0, s0, inputTrue, q),
+            trans(s0, s1, inputFalse, notQ),
+            trans(s1, s0, inputTrue, q),
+            trans(s1, s1, inputFalse, notQ)
+          ))
+
+      case Future =>
+        val input = inputName(0)
+        val s0 = loc("S0", u(input), q)
+        val s1 = loc("S1", notU(input), q, Bound(c, Lt, a))
+        val s2 = loc("S2", notU(input), q, Bound(c, Lt, a))
+        val s3 = loc("S3", notU(input), notQ)
+        val locations = Seq(si, s0, s1, s2, s3)
+
+        TimedTransducer(
+          "FutureTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq(c),
+          inputs.indices.map(inLabel),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, Formula.True, q),
+            trans(si, s1, Formula.True, notQ, reset = true),
+            trans(si, s2, Formula.True, q, reset = true),
+            trans(si, s3, Formula.True, notQ),
+            trans(s0, s0, notU(input), q),
+            trans(s0, s1, Formula.True, notQ, reset = true),
+            trans(s0, s2, Formula.True, q, reset = true),
+            trans(s0, s3, Formula.True, notQ, Bound(c, Lt, a), reset = true),
+            trans(s1, s0, Formula.True, q, Bound(c, Eq, a)),
+            trans(s1, s1, u(input), notQ, Bound(c, Eq, a), reset = true),
+            trans(s1, s2, u(input), q, Bound(c, Eq, a), reset = true),
+            trans(s1, s3, u(input), notQ, Bound(c, Eq, a)),
+            trans(s2, s0, Formula.True, notQ, Bound(c, Lt, a)),
+            trans(s2, s1, u(input), notQ, Bound(c, Lt, a), reset = true),
+            trans(s2, s2, u(input), q, Bound(c, Lt, a), reset = true),
+            trans(s2, s3, u(input), notQ, Bound(c, Lt, a)),
+            trans(s3, s1, notU(input), notQ, reset = true)
+          ))
+
+      case Past =>
+        val input = inputName(0)
+        val s0 = loc("S0", u(input), q)
+        val s1 = loc("S1", notU(input), q, Bound(c, Lt, a))
+        val s2 = loc("S2", notU(input), notQ)
+        val locations = Seq(si, s0, s1, s2)
+
+        TimedTransducer(
+          "PastTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq(c),
+          inputs.indices.map(inLabel),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, Formula.True, notQ),
+            trans(si, s1, u(input), notQ, reset = true),
+            trans(si, s2, notU(input), notQ),
+            trans(s0, s0, notU(input), q),
+            trans(s0, s1, Formula.True, q, reset = true),
+            trans(s0, s0, Formula.True, q, Bound(c, Lt, a)),
+            trans(s1, s0, Formula.True, notQ, Bound(c, Eq, a)),
+            trans(s1, s1, u(input), q, Bound(c, Lt, a), reset = true),
+            trans(s1, s1, u(input), notQ, Bound(c, Eq, a), reset = true),
+            trans(s1, s2, notU(input), notQ, Bound(c, Eq, a)),
+            trans(s2, s0, Formula.True, notQ),
+            trans(s2, s1, u(input), notQ)
+          ))
+
+      case Until =>
+        val input1 = inputName(0)
+        val input2 = inputName(1)
+        val s0 = loc("S0", andIn(u(input1), u(input2)), q)
+        val s1 = loc("S1", andIn(u(input1), notU(input2)), q)
+        val s2 = loc("S2", notU(input1), notQ)
+        val s3 = loc("S3", andIn(u(input1), notU(input2)), notQ)
+        val locations = Seq(si, s0, s1, s2, s3)
+
+        TimedTransducer(
+          "UntilTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq(c),
+          inputs.indices.map(inLabel),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, Formula.True, q),
+            trans(si, s1, Formula.True, q),
+            trans(si, s2, Formula.True, notQ),
+            trans(si, s3, Formula.True, notQ),
+            trans(s0, s0, orIn(notU(input1), notU(input2)), q),
+            trans(s0, s1, Formula.True, q),
+            trans(s0, s2, Formula.True, notQ),
+            trans(s0, s3, Formula.True, notQ),
+            trans(s1, s0, orIn(u(input1), u(input2)), q),
+            trans(s1, s1, u(input2), q),
+            trans(s1, s2, u(input2), notQ),
+            trans(s1, s3, u(input2), notQ),
+            trans(s2, s0, Formula.True, q),
+            trans(s2, s1, Formula.True, q),
+            trans(s2, s2, u(input1), notQ),
+            trans(s2, s3, Formula.True, notQ),
+            trans(s3, s0, andIn(notU(input1), notU(input2)), q),
+            trans(s3, s1, andIn(notU(input1), notU(input2)), q),
+            trans(s3, s2, u(input2), notQ),
+            trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
+          ))
+
+      case Since =>
+        val input1 = inputName(0)
+        val input2 = inputName(1)
+        val s0 = loc("S0", andIn(u(input1), u(input2)), q)
+        val s1 = loc("S1", andIn(u(input1), notU(input2)), q)
+        val s2 = loc("S2", notU(input1), notQ)
+        val s3 = loc("S3", andIn(u(input1), notU(input2)), notQ)
+        val locations = Seq(si, s0, s1, s2, s3)
+
+        TimedTransducer(
+          "SinceTransducer_" + inputs.mkString("_") + "_" + output.toString,
+          locations,
+          si,
+          Seq(c),
+          inputs.indices.map(inLabel),
+          Seq(outputLabel),
+          Seq(
+            trans(si, s0, Formula.True, q),
+            trans(si, s1, u(input2), notQ),
+            trans(si, s2, Formula.True, q),
+            trans(si, s3, notU(input2), notQ),
+            trans(s0, s0, orIn(notU(input1), notU(input2)), q),
+            trans(s0, s1, orIn(u(input1), u(input2)), notQ),
+            trans(s0, s2, Formula.True, q),
+            trans(s0, s3, andIn(notU(input1), notU(input2)), notQ),
+            trans(s1, s0, Formula.True, q),
+            trans(s1, s1, u(input2), notQ),
+            trans(s1, s2, Formula.True, q),
+            trans(s1, s3, andIn(notU(input1), notU(input2)), notQ),
+            trans(s2, s0, Formula.True, notQ),
+            trans(s2, s1, u(input2), notQ),
+            trans(s2, s2, u(input1), q),
+            trans(s2, s3, notU(input2), notQ),
+            trans(s3, s0, Formula.True, notQ),
+            trans(s3, s1, notU(input2), notQ),
+            trans(s3, s2, Formula.True, notQ),
+            trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
+          ))
+    }
+  }
+}
