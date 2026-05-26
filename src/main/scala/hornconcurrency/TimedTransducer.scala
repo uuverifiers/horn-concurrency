@@ -143,7 +143,21 @@ object TimedTransducer {
                              clocks: Seq[Clock],
                              inputLabels: Seq[InputLabel],
                              outputLabels: Seq[OutputLabel],
-                             transitions: Seq[Transition])
+                             transitions: Seq[Transition],
+                             acceptanceCondition: Seq[(Seq[Location], Seq[Transition])] = Seq.empty
+                             )
+
+  def location_to_acceptance_sets(l : Location, tt : TimedTransducer) : Seq[Int] = {
+    tt.acceptanceCondition.zipWithIndex.collect {
+      case ((locs, _), idx) if locs.contains(l) => idx
+    }
+  }
+  def transition_to_acceptance_sets(t : Transition, tt : TimedTransducer) : Seq[Int] = {
+    tt.acceptanceCondition.zipWithIndex.collect {
+      case ((_, transitions), idx) if transitions.contains(t) => idx
+    }
+  }                           
+
 
   sealed trait TimedTransducerEquation
   case class Base(t: TimedTransducer) extends TimedTransducerEquation
@@ -347,7 +361,9 @@ object TimedTransducer {
             trans(s3, s1, andIn(notU(input1), notU(input2)), q),
             trans(s3, s2, u(input2), notQ),
             trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
-          ))
+          ),
+          Seq((Seq(s1), Seq.empty))
+          )
 
       case Since =>
         val input1 = inputName(0)
