@@ -48,10 +48,6 @@ class TimedTransducerTests extends FlatSpec {
     val conj2 = conj && b3
     val conj3 = conj2 && b4
 
-    println(conj)
-    println(conj2)
-    println(conj3)
-
     assert(conj3 == Conjunction(Seq(b1, b2, b3, b4)))
   }
 }
