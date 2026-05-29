@@ -29,8 +29,7 @@
 
 package hornconcurrency
 
-sealed trait MITL {
-}
+sealed trait MITL {}
 
 object MITL {
     final case class AP(label: String) extends MITL {
@@ -117,9 +116,9 @@ object MITL {
             // case Negation(Negation(inner)) => nf(inner)
             case Negation(inner) => Negation(nf(inner))
             case Disjunction(left, right) => Disjunction(nf(left), nf(right))
-            // case Conjunction(left, right) => Negation(Disjunction(Negation(nf(left)), Negation(nf(right))))
-            case Conjunction(left, right) => Conjunction(nf(left), nf(right))
-            case Implication(left, right) => Implication(nf(left), nf(right))
+            case Conjunction(left, right) => Negation(Disjunction(Negation(nf(left)), Negation(nf(right))))
+            // case Conjunction(left, right) => Conjunction(nf(left), nf(right))
+            case Implication(left, right) => Disjunction(Negation(nf(left)), nf(right))
             case U(OpenOpen(Finite(0), PosInfty), left, right) =>
                 val l = nf(left)
                 val r = nf(right)

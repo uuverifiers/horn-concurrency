@@ -29,13 +29,13 @@
 
 package hornconcurrency
 import hornconcurrency.MITL._
-import hornconcurrency.TTTranslator.mitl_translation
+import hornconcurrency.MITLTransducerTranslator.mitlTranslation
 import hornconcurrency.TimedTransducerEncoder.EncodedTransducer
 import hornconcurrency.TimedTransducerEncoder.encodeTransducerEquation
 import hornconcurrency.TimedTransducer.TimedTransducerEquation
 
-object TTTranslator {
-    def mitl_translation(formula: MITL): TimedTransducer.TimedTransducerEquation = {
+object MITLTransducerTranslator {
+    def mitlTranslation(formula: MITL): TimedTransducer.TimedTransducerEquation = {
         var nextVar: Int = 0
 
         def fresh(): Int = {
@@ -49,14 +49,23 @@ object TTTranslator {
             output: Int,
             bound: Int
         ): TimedTransducerEquation = {
-            val input = fresh()
-            val b = TimedTransducer.Base(TimedTransducer.baseTransducer(kind, input, output, bound))
-
-            println(inner)
-
+            def transducerFromInput(input: String) : TimedTransducer.Base = {
+                TimedTransducer.Base(
+                        TimedTransducer.baseTransducer(
+                            kind,
+                            TimedTransducer.InputLabel(input),
+                            TimedTransducer.OutputLabel(output.toString()),
+                            bound
+                        )
+                    )
+            }
             inner match {
-                case AP(_)  => b
-                case _      => TimedTransducer.Sequential(translate(inner, input), b)
+                case AP(label)  =>
+                    transducerFromInput(label)
+                case _      =>
+                    val intermediateSignal = fresh()
+                    val base = transducerFromInput(intermediateSignal.toString())
+                    TimedTransducer.Sequential(translate(inner, intermediateSignal), base)
             }
         }
 
@@ -67,15 +76,23 @@ object TTTranslator {
             output: Int,
             bound: Int
         ): TimedTransducerEquation = {
-            val leftInput = fresh()
-            val rightInput = fresh()
-            val b = TimedTransducer.Base(TimedTransducer.baseTransducer(kind, Seq(leftInput, rightInput), output, bound))
+            val (leftInput, leftTransducer) = InputFor(left)
+            val (rightInput, rightTransducer) = InputFor(right)
+
 
             val transducers = Seq(
-                translateNonAtomic(left, leftInput),
-                translateNonAtomic(right, rightInput)
+                leftTransducer,
+                rightTransducer
             ).flatten
 
+            val b = TimedTransducer.Base(
+                TimedTransducer.baseTransducer(
+                    kind,
+                    Seq(TimedTransducer.InputLabel(leftInput), TimedTransducer.InputLabel(rightInput)),
+                    TimedTransducer.OutputLabel(output.toString()),
+                    bound
+                )
+            )
             transducers match {
                 case Seq()  => b
                 case Seq(single) => {
@@ -87,38 +104,29 @@ object TTTranslator {
             }
         }
 
-        def translateNonAtomic(formula: MITL, output: Int) : Option[TimedTransducer.TimedTransducerEquation] = {
+        def InputFor(formula: MITL) : (String, Option[TimedTransducer.TimedTransducerEquation]) = {
             formula match {
-                case AP(_) => None
-                case _ => Some(translate(formula, output))
+                case AP(label) => (label, None)
+                case _ =>
+                    val intermediateSignal = fresh()
+                    (intermediateSignal.toString(), Some(translate(formula, intermediateSignal)))
             }
         }
 
-        def translate(formula: MITL, output: Int): TimedTransducer.TimedTransducerEquation = {
+        /*  Main idea: Given a temporal operator, e.g. F_{(0,a)}(p), generate a transducer T_F
+            s.t. T_F has p as input and a fresh variable q as output.
+        */
+        def translate(formula: MITL, outputSignal: Int): TimedTransducer.TimedTransducerEquation = {
             formula match {
-                case Negation(inner)                     => unary(TimedTransducer.BoolNot, inner, output, -1)
-                case Diamond(ClosedClosed(0, a), inner)  => unary(TimedTransducer.Future, inner, output, a)
-                case PDiamond(ClosedClosed(0, a), inner) => unary(TimedTransducer.Past, inner, output, a)
-                case Disjunction(left, right)            => binary(TimedTransducer.BoolOr, left, right, output, -1)
-                case U(ClosedClosed(0, a), left, right)  => binary(TimedTransducer.Until, left, right, output, a)
-                case S(ClosedClosed(0, a), left, right)  => binary(TimedTransducer.Since, left, right, output, a)
+                case Negation(inner)                     => unary(TimedTransducer.BoolNot, inner, outputSignal, -1)
+                case Diamond(OpenOpen(Finite(0), Finite(a)), inner)  => unary(TimedTransducer.Future, inner, outputSignal, a)
+                case PDiamond(OpenOpen(Finite(0), Finite(a)), inner) => unary(TimedTransducer.Past, inner, outputSignal, a)
+                case Disjunction(left, right)            => binary(TimedTransducer.BoolOr, left, right, outputSignal, -1)
+                case U(OpenOpen(Finite(0), PosInfty), left, right)  => binary(TimedTransducer.Until, left, right, outputSignal, -1)
+                case S(OpenOpen(Finite(0), PosInfty), left, right)  => binary(TimedTransducer.Since, left, right, outputSignal, -1)
                 case _ => ???
             }
         }
         translate(formula, 0)
     }
-}
-
-object MainMITLTransducerTranslation extends App {
-
-    val ap = AP("a")
-    val formula = Diamond(ClosedClosed(0, 5), Diamond(ClosedClosed(0, 10), ap))
-
-    val t = mitl_translation(formula)
-
-    println(t)
-
-    val e = encodeTransducerEquation(t)
-
-    println(e)
 }

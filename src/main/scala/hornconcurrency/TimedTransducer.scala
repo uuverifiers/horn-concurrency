@@ -167,14 +167,14 @@ object TimedTransducer {
     extends TimedTransducerEquation
 
   def baseTransducer(kind: BaseTransducerKind,
-                     input: Any,
-                     output: Any,
+                     input: InputLabel,
+                     output: OutputLabel,
                      const: Int): TimedTransducer =
     baseTransducer(kind, Seq(input), output, const)
 
   def baseTransducer(kind: BaseTransducerKind,
-                     inputs: Seq[Any],
-                     output: Any,
+                     inputs: Seq[InputLabel],
+                     output: OutputLabel,
                      const: Int): TimedTransducer = {
     import ClockConstraint._
     import Formula._
