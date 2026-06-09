@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   name := "Horn-Concurrency",
   organization := "uuverifiers",
-  version := "2.2.1",
+  version := "2.2.1-signals-SNAPSHOT",
   scalaVersion := "2.13.18",
   crossScalaVersions := Seq("2.13.18"),
   description := "Encoding of concurrent or replicated programs using Horn clauses",
@@ -27,11 +27,23 @@ lazy val commonSettings = Seq(
   publishTo := Some(Resolver.file("file",  new File( "/home/compilation/public_html/maven/" )))
 )
 
+lazy val mitlParser = (project in file("mitl-parser")).
+  settings(commonSettings: _*).
+//  settings(parserSettings: _*).
+  settings(
+    name := "HornConcurrency-MITL-parser",
+    packageBin in Compile := baseDirectory.value / "mitl-parser.jar",
+    unmanagedJars in Compile += baseDirectory.value / "mitl-parser.jar"
+  ).disablePlugins(AssemblyPlugin)
+
+
 assembly / test := {}
 
 // Project
 
 lazy val root = (project in file(".")).
+  aggregate(mitlParser).
+  dependsOn(mitlParser).
   settings(commonSettings: _*).
 
 settings(

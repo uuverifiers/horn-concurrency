@@ -6,9 +6,10 @@
 --------------------------------------------------
 
 
-MitlSpec. Mitl ::= "MITL_SPEC" ":" Formula ";" ;
 
-RankingFunDecl. Decl ::= "RANKING_FUNCTION" Integer ":" Expr ";" ;
+RankFunc. MitlDecl ::= "RANKING_FUNCTION" Integer ":" Expr ";" ;
+MitlFormula. MitlDecl ::= "MITL_SPEC" ":" Formula ";" ;
+
 
 
 --------------------------------------------------

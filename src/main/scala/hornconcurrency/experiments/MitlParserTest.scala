@@ -4,17 +4,17 @@ import java.io.StringReader
 
 import hornconcurrency.mitl.Yylex
 import hornconcurrency.mitl.parser
-import hornconcurrency.mitl.Absyn.Mitl
+import hornconcurrency.mitl.Absyn.MitlDecl
 
 object MitlParserTest extends App {
 
-  def parse(input: String): Mitl = {
+  def parse(input: String): MitlDecl = {
     val reader = new StringReader(input)
     
     val lexer = new Yylex(reader)
     val parser = new parser(lexer, lexer.getSymbolFactory())
 
-    val result = parser.pMitl()   // entry point from BNFC
+    val result = parser.pMitlDecl()   // entry point from BNFC
     result
   }
 
@@ -120,8 +120,16 @@ Seq(
   """MITL_SPEC : ({3}G@(0,5]({1}F(1 < 2))) S ({2}F@[0,3](2 < 3)) ;""".stripMargin
 )
 
+val ranking_inputs = Seq(
+  """RANKING_FUNCTION 1: x + 1;""".stripMargin,
+  """RANKING_FUNCTION 2: rank1 - rank2;""".stripMargin,
+  """RANKING_FUNCTION 3: score * 2;""".stripMargin,
+  """RANKING_FUNCTION 4: a * b + 42;""".stripMargin,
+  """RANKING_FUNCTION 5: (1337 * y) - (z + 1) / 44;""".stripMargin 
+)
+
     try {
-      inputs.map{case x =>
+      (inputs ++ ranking_inputs).foreach{case x =>
         println(s"Parsing input:\n$x\n")
         val ast = parse(x)
 
