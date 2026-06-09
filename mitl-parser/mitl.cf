@@ -1,0 +1,181 @@
+-- MITL grammar for BNFC (Java backend)
+-- Precedence + temporal operators + optional intervals
+
+--------------------------------------------------
+-- Program structure
+--------------------------------------------------
+
+
+MitlSpec. Mitl ::= "MITL_SPEC" ":" Formula ";" ;
+
+RankingFunDecl. Decl ::= "RANKING_FUNCTION" Integer ":" Expr ";" ;
+
+
+--------------------------------------------------
+-- Formula precedence
+--------------------------------------------------
+
+
+-- Level 0: IFF (lowest precedence)
+FIff.
+Formula ::= Formula "<=>" Formula1 ;
+FBase.
+Formula ::= Formula1 ;
+
+
+-- Level 1: IMPLICATION
+FImpl.
+Formula1 ::= Formula1 "==>" Formula2 ;
+_. Formula1 ::= Formula2;
+
+-- Level 2: OR
+FOr.
+Formula2 ::= Formula2 "||" Formula3 ;
+_. Formula2 ::= Formula3;
+
+-- Level 3: TEMPORAL BINARY (UNTIL / SINCE)
+FUntil.
+Formula3 ::= Formula3 "U" OptInterval Formula4 ;
+
+FSince.
+Formula3 ::= Formula3 "S" OptInterval Formula4 ;
+
+_. Formula3 ::= Formula4;
+
+-- Level 4: AND
+FAnd.
+Formula4 ::= Formula4 "&&" Formula5 ;
+_. Formula4 ::= Formula5;
+
+-- Level 5: UNARY (highest precedence)
+
+-- NOT
+FNot.
+Formula5 ::= "!" Formula5 ;
+
+-- FUTURE operators
+FEventually.
+Formula5 ::= OptRank "F" OptInterval Formula6 ;
+
+FGlobally.
+Formula5 ::= OptRank "G" OptInterval Formula6 ;
+
+-- PAST operators
+FHistorically.
+Formula5 ::= OptRank "H" OptInterval Formula6 ;
+
+FOnce.
+Formula5 ::= OptRank "P" OptInterval Formula6 ;
+UnOpBase. Formula5 ::= Formula6 ;
+
+
+-- atomic formulas
+FAtom.
+Formula6 ::= Atom ;
+
+-- parentheses
+FPar.
+Formula6 ::= "(" Formula ")" ;
+
+
+
+--------------------------------------------------
+-- Optional ranking annotation
+--------------------------------------------------
+
+NoRank.
+OptRank ::= ;
+
+WithRank.
+OptRank ::= "{" Integer "}" ;
+
+--------------------------------------------------
+-- Optional interval
+--------------------------------------------------
+
+NoInterval.
+OptInterval ::= ;
+
+WithInterval.
+OptInterval ::= "@" Interval ;
+
+--------------------------------------------------
+-- Intervals
+--------------------------------------------------
+
+RightOpenInterval.
+Interval ::= "[" MitlBound "," MitlBound ")" ;
+OpenInterval.
+Interval ::= "(" MitlBound "," MitlBound ")" ;
+ClosedInterval.
+Interval ::= "[" MitlBound "," MitlBound "]" ;
+LeftOpenInterval.
+Interval ::= "(" MitlBound "," MitlBound "]" ;
+
+MitlBoundInt. MitlBound ::= Integer ;
+MitlBoundInfty. MitlBound ::= "infty" ;
+
+--------------------------------------------------
+-- Atomic predicates
+--------------------------------------------------
+
+AtomRel.
+Atom ::= Expr RelOp Expr ;
+
+--------------------------------------------------
+-- Arithmetic expressions
+--------------------------------------------------
+
+
+-- Level 0: + -
+EAdd.
+Expr ::= Expr "+" Expr1 ;
+
+ESub.
+Expr ::= Expr "-" Expr1 ;
+
+_. Expr ::= Expr1 ;
+
+-- Level 1: *
+EMul.
+Expr1 ::= Expr1 "*" Expr2 ;
+EDiv.
+Expr1 ::= Expr1 "/" Expr2 ;
+_. Expr1 ::= Expr2 ;
+
+-- Level 2: atoms
+EVar.
+Expr2 ::= Id ;
+
+EInt.
+Expr2 ::= Integer ;
+
+EParen.
+Expr2 ::= "(" Expr ")" ;
+
+
+
+
+--------------------------------------------------
+-- Relational operators
+--------------------------------------------------
+
+RelLt.  RelOp ::= "<" ;
+RelLe.  RelOp ::= "<=" ;
+RelGt.  RelOp ::= ">" ;
+RelGe.  RelOp ::= ">=" ;
+RelEq.  RelOp ::= "==" ;
+RelNeq. RelOp ::= "!=" ;
+
+--------------------------------------------------
+-- Tokens
+--------------------------------------------------
+
+position token Id (letter | '_' | '$') (letter | digit | '_' | '$')*;
+
+--------------------------------------------------
+-- Comments
+--------------------------------------------------
+
+comment "//" ;
+comment "/*" "*/" ;
