@@ -48,7 +48,7 @@ object TimedTransducerEncoder {
     import IExpression._
     import System._
     import SignalSystem._
-    import Rationals.{geq, leq, gt, minus, int2ring => toRat}
+    import Rationals.{geq, leq, gt, lt, minus, int2ring => toRat}
     import ADT._
     import ADT.BoolADT.{True, False}
     import TimedTransducer.{Location, Formula}
@@ -236,13 +236,13 @@ object TimedTransducerEncoder {
                 clock_constraint match {
                     case TimedTransducer.ClockConstraint.True => true
                     case TimedTransducer.ClockConstraint.Bound(clock, TimedTransducer.ClockConstraint.Lt, c) =>
-                        (minus(global_clock, IConstant(clockEnvironment(clock))) < toRat(c))
+                        lt(minus(global_clock, IConstant(clockEnvironment(clock))), toRat(c))
                     case TimedTransducer.ClockConstraint.Bound(clock, TimedTransducer.ClockConstraint.Leq, c) =>
-                        (minus(global_clock, IConstant(clockEnvironment(clock))) <= toRat(c))
+                        leq(minus(global_clock, IConstant(clockEnvironment(clock))), toRat(c))
                     case TimedTransducer.ClockConstraint.Bound(clock, TimedTransducer.ClockConstraint.Gt, c) =>
-                        (minus(global_clock, IConstant(clockEnvironment(clock))) > toRat(c))
+                        gt(minus(global_clock, IConstant(clockEnvironment(clock))), toRat(c))
                     case TimedTransducer.ClockConstraint.Bound(clock, TimedTransducer.ClockConstraint.Geq, c) =>
-                        (minus(global_clock, IConstant(clockEnvironment(clock))) >= toRat(c))
+                        geq(minus(global_clock, IConstant(clockEnvironment(clock))), toRat(c))
                     case TimedTransducer.ClockConstraint.Bound(clock, TimedTransducer.ClockConstraint.Eq, c) =>
                         (minus(global_clock, IConstant(clockEnvironment(clock))) === toRat(c))
                     case TimedTransducer.ClockConstraint.Conjunction(args) => and(args.map(encode))
