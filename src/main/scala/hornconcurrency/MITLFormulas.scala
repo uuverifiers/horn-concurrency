@@ -29,6 +29,7 @@
 
 package hornconcurrency
 
+
 sealed trait MITL {}
 
 object MITL {
@@ -86,22 +87,23 @@ object MITL {
     final case class Implication(left: MITL, right: MITL) extends MITL {
         override def toString : String = "(" + left.toString() + " => " + right.toString()  + ")"
     }
-    final case class U(interval: Interval, left: MITL, right: MITL) extends MITL {
+
+    final case class U(interval: Interval, left: MITL, right: MITL, rankId: Option[Int]) extends MITL {
         override def toString : String = "(" + left.toString() + " U_" + interval + "(" + right.toString()  + ")"
     }
-    final case class S(interval: Interval, left: MITL, right: MITL) extends MITL {
+    final case class S(interval: Interval, left: MITL, right: MITL, rankId: Option[Int]) extends MITL {
         override def toString : String = "(" + left.toString() + " S_" + interval + "(" + right.toString()  + ")"
     }
-    final case class Diamond(interval: Interval, inner: MITL) extends MITL  {
+    final case class Diamond(interval: Interval, inner: MITL, rankId: Option[Int]) extends MITL  {
         override def toString : String = "♦_" + interval.toString() + "(" + inner.toString() + ")"
     }
-    final case class PDiamond(interval: Interval, inner: MITL) extends MITL  {
+    final case class PDiamond(interval: Interval, inner: MITL, rankId: Option[Int]) extends MITL  {
         override def toString : String = "p♦_" + interval.toString() + "(" + inner.toString() + ")"
     }
-    final case class Box(interval: Interval, inner: MITL) extends MITL  {
+    final case class Box(interval: Interval, inner: MITL, rankId: Option[Int]) extends MITL  {
         override def toString : String = "□_" + interval.toString() + "(" + inner.toString() + ")"
     }
-    final case class PBox(interval: Interval, inner: MITL) extends MITL  {
+    final case class PBox(interval: Interval, inner: MITL, rankId: Option[Int]) extends MITL  {
         override def toString : String = "⊟_" + interval.toString() + "(" + inner.toString() + ")"
     }
 
@@ -119,155 +121,157 @@ object MITL {
             case Conjunction(left, right) => Negation(Disjunction(Negation(nf(left)), Negation(nf(right))))
             // case Conjunction(left, right) => Conjunction(nf(left), nf(right))
             case Implication(left, right) => Disjunction(Negation(nf(left)), nf(right))
-            case U(OpenOpen(Finite(0), PosInfty), left, right) =>
+            case U(OpenOpen(Finite(0), PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                U(OpenOpen(Finite(0), PosInfty), l, r)
-            case S(OpenOpen(Finite(0), PosInfty), left, right) =>
+                U(OpenOpen(Finite(0), PosInfty), l, r, rank)
+            case S(OpenOpen(Finite(0), PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                S(OpenOpen(Finite(0), PosInfty), l, r)
-            case Diamond(OpenOpen(Finite(0), Finite(b)), inner) =>
-                Diamond(OpenOpen(Finite(0), Finite(b)), nf(inner))
-            case PDiamond(OpenOpen(Finite(0), Finite(b)), inner) =>
-                PDiamond(OpenOpen(Finite(0), Finite(b)), nf(inner))
+                S(OpenOpen(Finite(0), PosInfty), l, r, rank)
+            case Diamond(OpenOpen(Finite(0), Finite(b)), inner, rank) =>
+                Diamond(OpenOpen(Finite(0), Finite(b)), nf(inner), rank)
+            case PDiamond(OpenOpen(Finite(0), Finite(b)), inner, rank) =>
+                PDiamond(OpenOpen(Finite(0), Finite(b)), nf(inner), rank)
 
             /* Inductive rewriting rules */
             
-            case U(OpenOpen(Finite(c), PosInfty), left, right) =>
-                val res = Box(OpenClosed(0, c), Conjunction(left, U(OpenOpen(0, PosInfty), left, right)))
+            case U(OpenOpen(Finite(c), PosInfty), left, right, rank) =>
+                val res = Box(OpenClosed(0, c), Conjunction(left, U(OpenOpen(0, PosInfty), left, right, rank)), rank)
                 nf(res)
-            case U(OpenOpen(a, b), left, right) =>
+            case U(OpenOpen(a, b), left, right, rank) =>
                 val res = Conjunction(
-                    U(OpenOpen(a, PosInfty), left, right),
-                    Diamond(OpenOpen(a,b), right)
+                    U(OpenOpen(a, PosInfty), left, right, rank),
+                    Diamond(OpenOpen(a,b), right, rank)
                 )
                 nf(res)
-            case U(OpenClosed(a, b), left, right) =>
+            case U(OpenClosed(a, b), left, right, rank) =>
                 val res = Conjunction(
-                    U(OpenOpen(a, PosInfty), left, right),
-                    Diamond(OpenClosed(a,b), right)
+                    U(OpenOpen(a, PosInfty), left, right, rank),
+                    Diamond(OpenClosed(a,b), right, rank)
                 )
                 nf(res)
-            case U(ClosedOpen(c, PosInfty), left, right) =>
+            case U(ClosedOpen(c, PosInfty), left, right, rank) =>
                 val res = Conjunction(
-                    Box(OpenOpen(0, c), left),
+                    Box(OpenOpen(0, c), left, rank),
                     Box(OpenClosed(0, c), 
                         Disjunction(
                             left, 
                             Conjunction(
                                 left, 
-                                U(OpenOpen(0, PosInfty), left, right))))
+                                U(OpenOpen(0, PosInfty), left, right, rank))), rank)
                 )
                 nf(res)
-            case U(ClosedOpen(a, b), left, right) =>
+            case U(ClosedOpen(a, b), left, right, rank) =>
                 val res = Conjunction(
-                    U(ClosedOpen(a, PosInfty), left, right),
-                    Diamond(ClosedOpen(a,b), right)
+                    U(ClosedOpen(a, PosInfty), left, right, rank),
+                    Diamond(ClosedOpen(a,b), right, rank)
                 )
                 nf(res)
-            case U(ClosedClosed(a, b), left, right) =>
+            case U(ClosedClosed(a, b), left, right, rank) =>
                 val res = Conjunction(
-                    U(ClosedOpen(a, PosInfty), left, right),
-                    Diamond(ClosedClosed(a,b), right)
+                    U(ClosedOpen(a, PosInfty), left, right, rank),
+                    Diamond(ClosedClosed(a,b), right, rank)
                 )
                 nf(res)
-            case U(i, left, right) => 
-                val res = U(i, left, right)
-                nf(res)
-            case S(OpenOpen(Finite(c), PosInfty), left, right) =>
+            case U(i, left, right, rank) => U(i, nf(left), nf(right), rank)
+            case S(OpenOpen(Finite(c), PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                PBox(OpenClosed(0, c), Conjunction(l, S(OpenOpen(0, PosInfty), l, r)))
-            case S(OpenOpen(a, b), left, right) =>
-                val l = nf(left)
-                val r = nf(right)
-                Conjunction(
-                    S(OpenOpen(a, PosInfty), l, r),
-                    PDiamond(OpenOpen(a,b), r)
-                )
-            case S(OpenClosed(a, b), left, right) =>
+                PBox(OpenClosed(0, c), Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank)), rank)
+            case S(OpenOpen(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
                 Conjunction(
-                    S(OpenOpen(a, PosInfty), l, r),
-                    PDiamond(OpenClosed(a,b), r)
+                    S(OpenOpen(a, PosInfty), l, r, rank),
+                    PDiamond(OpenOpen(a,b), r, rank)
                 )
-            case S(ClosedOpen(c, PosInfty), left, right) =>
+            case S(OpenClosed(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
                 Conjunction(
-                    PBox(OpenOpen(0, c), l),
-                    PBox(OpenClosed(0, c), Disjunction(l, Conjunction(l, S(OpenOpen(0, PosInfty), l, r))))
+                    S(OpenOpen(a, PosInfty), l, r, rank),
+                    PDiamond(OpenClosed(a,b), r, rank)
                 )
-            case S(ClosedOpen(a, b), left, right) =>
+            case S(ClosedOpen(c, PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
                 Conjunction(
-                    S(ClosedOpen(a, PosInfty), l, r),
-                    PDiamond(ClosedOpen(a,b), r)
+                    PBox(OpenOpen(0, c), l, rank),
+                    PBox(OpenClosed(0, c), Disjunction(l, Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank))), rank)
                 )
-            case S(ClosedClosed(a, b), left, right) =>
+            case S(ClosedOpen(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
                 Conjunction(
-                    S(ClosedOpen(a, PosInfty), l, r),
-                    PDiamond(ClosedClosed(a,b), r)
+                    S(ClosedOpen(a, PosInfty), l, r, rank),
+                    PDiamond(ClosedOpen(a,b), r, rank)
                 )
-            case S(i, left, right) => S(i, nf(left), nf(right))
+            case S(ClosedClosed(a, b), left, right, rank) =>
+                val l = nf(left)
+                val r = nf(right)
+                Conjunction(
+                    S(ClosedOpen(a, PosInfty), l, r, rank),
+                    PDiamond(ClosedClosed(a,b), r, rank)
+                )
+            case S(i, left, right, rank) => S(i, nf(left), nf(right), rank)
 
-            case Diamond(OpenClosed(Finite(0), a), inner) =>
+            case Diamond(OpenClosed(Finite(0), a), inner, rank) =>
                 val res = Disjunction(
-                    Diamond(OpenOpen(0, a), inner),
+                    Diamond(OpenOpen(0, a), inner, rank),
                     Conjunction(
-                        U(OpenOpen(0, PosInfty), Diamond(OpenOpen(0, a), inner), Diamond(OpenOpen(0, a), inner)),
-                        U(OpenOpen(0, PosInfty), Negation(inner), inner)
+                        U(OpenOpen(0, PosInfty), Diamond(OpenOpen(0, a), inner, rank), Diamond(OpenOpen(0, a), inner, rank), rank),
+                        U(OpenOpen(0, PosInfty), Negation(inner), inner, rank)
                     ))
                 nf(res)
-            case Diamond(ClosedOpen(0, a), inner) =>
-                nf(Disjunction(inner, Diamond(OpenOpen(0, a), inner)))
-            case Diamond(ClosedClosed(0, a), inner) => 
-                nf(Disjunction(inner, Diamond(OpenClosed(0, a), inner)))
-            case Diamond(OpenOpen(Finite(a), Finite(b)), inner) => 
+            case Diamond(ClosedOpen(0, a), inner, rank) =>
+                nf(Disjunction(inner, Diamond(OpenOpen(0, a), inner, rank)))
+            case Diamond(ClosedClosed(0, a), inner, rank) => 
+                nf(Disjunction(inner, Diamond(OpenClosed(0, a), inner, rank)))
+            case Diamond(OpenOpen(Finite(a), Finite(b)), inner, rank) => 
                 val c = math.min(a, b-a)
-                val res = Diamond(OpenOpen(0, c), Box(OpenOpen(0, c), Diamond(OpenOpen(a-c, b-c), inner)))
+                val res = Diamond(OpenOpen(0, c), Box(OpenOpen(0, c), Diamond(OpenOpen(a-c, b-c), inner, rank), rank), rank)
                 nf(res)
-            case Diamond(OpenClosed(Finite(a), b), inner) => 
+            case Diamond(OpenClosed(Finite(a), b), inner, rank) => 
                 val c = math.min(a, b-a)
-                val res = Diamond(OpenClosed(0, c), Box(ClosedOpen(0, c), Diamond(OpenClosed(a-c, b-c), inner)))
+                val res = Diamond(OpenClosed(0, c), Box(ClosedOpen(0, c), Diamond(OpenClosed(a-c, b-c), inner, rank), rank), rank)
                 nf(res)
-            case Diamond(ClosedOpen(a, Finite(b)), inner) if b-a > 0 => 
+            case Diamond(ClosedOpen(a, Finite(b)), inner, rank) if b-a > 0 => 
                 val c = math.min(a, b-a)
-                val res = Diamond(ClosedOpen(0, c), Box(OpenClosed(0, c), Diamond(ClosedOpen(a-c, b-c), inner)))
+                val res = Diamond(ClosedOpen(0, c), Box(OpenClosed(0, c), Diamond(ClosedOpen(a-c, b-c), inner, rank), rank), rank)
                 nf(res)
-            case Diamond(ClosedClosed(a, b), inner) =>
+            case Diamond(ClosedClosed(a, b), inner, rank) =>
                 val c = math.min(a, b-a)
-                val res = Diamond(ClosedClosed(0, c), Box(ClosedClosed(0, c), Diamond(ClosedClosed(a-c, b-c), inner)))
+                val res = Diamond(ClosedClosed(0, c), Box(ClosedClosed(0, c), Diamond(ClosedClosed(a-c, b-c), inner, rank), rank), rank)
                 nf(res)
             // case Diamond(interval, inner) => U(interval, True, nf(inner))
             
-            case PDiamond(OpenClosed(Finite(0), a), inner) =>
+            case PDiamond(OpenClosed(Finite(0), a), inner, rank) =>
                 val i = nf(inner)
                 Disjunction(
-                    PDiamond(OpenOpen(0, a), i),
+                    PDiamond(OpenOpen(0, a), i, rank),
                     Conjunction(
-                        S(OpenOpen(0, PosInfty), PDiamond(OpenOpen(0, a), i), PDiamond(OpenOpen(0, a), i)),
-                        S(OpenOpen(0, PosInfty), Negation(i), i)
+                        S(OpenOpen(0, PosInfty), PDiamond(OpenOpen(0, a), i, rank), PDiamond(OpenOpen(0, a), i, rank), rank),
+                        S(OpenOpen(0, PosInfty), Negation(i), i, rank)
                     ))
-            case PDiamond(ClosedOpen(0, a), inner) =>
+            case PDiamond(ClosedOpen(0, a), inner, rank) =>
                 val i = nf(inner)
-                Disjunction(i, PDiamond(OpenOpen(0, a), i))
-            case PDiamond(ClosedClosed(0, a), inner) =>
+                Disjunction(i, PDiamond(OpenOpen(0, a), i, rank))
+            case PDiamond(ClosedClosed(0, a), inner, rank) =>
                 val i = nf(inner)
-                Disjunction(i, PDiamond(OpenClosed(0, a), i))
-            case PDiamond(OpenOpen(Finite(a), Finite(b)), inner) => PDiamond(OpenOpen(a, b-a), PBox(OpenOpen(a, b-a), PDiamond(OpenOpen(a, b), nf(inner))))
-            case PDiamond(OpenClosed(Finite(a), b), inner) => PDiamond(OpenClosed(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(OpenClosed(a, b), nf(inner))))
-            case PDiamond(ClosedOpen(a, Finite(b)), inner) => PDiamond(ClosedOpen(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(ClosedOpen(a, b), nf(inner))))
-            case PDiamond(ClosedClosed(a, b), inner) => PDiamond(ClosedClosed(a, b-a), PBox(ClosedClosed(a, b-a), PDiamond(ClosedClosed(a, b), nf(inner))))
-            case PDiamond(interval, inner) => S(interval, True, nf(inner))
-            case Box(interval, inner) => nf(Negation(Diamond(interval, Negation(inner))))
+                Disjunction(i, PDiamond(OpenClosed(0, a), i, rank))
+            case PDiamond(OpenOpen(Finite(a), Finite(b)), inner, rank) => 
+                PDiamond(OpenOpen(a, b-a), PBox(OpenOpen(a, b-a), PDiamond(OpenOpen(a, b), nf(inner), rank), rank), rank)
+            case PDiamond(OpenClosed(Finite(a), b), inner, rank) => 
+                PDiamond(OpenClosed(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(OpenClosed(a, b), nf(inner), rank), rank), rank)
+            case PDiamond(ClosedOpen(a, Finite(b)), inner, rank) => 
+                PDiamond(ClosedOpen(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(ClosedOpen(a, b), nf(inner), rank), rank), rank)
+            case PDiamond(ClosedClosed(a, b), inner, rank) => 
+                PDiamond(ClosedClosed(a, b-a), PBox(ClosedClosed(a, b-a), PDiamond(ClosedClosed(a, b), nf(inner), rank), rank), rank)
+            case PDiamond(interval, inner, rank) => S(interval, True, nf(inner), rank)
+            case Box(interval, inner, rank) => nf(Negation(Diamond(interval, Negation(inner), rank)))
             // case Box(interval, inner) => Negation(U(interval, True, Negation(nf(inner))))
-            case PBox(interval, inner) => Negation(S(interval, True, Negation(nf(inner))))
+            case PBox(interval, inner, rank) => Negation(S(interval, True, Negation(nf(inner)), rank))
         }
     }
 }

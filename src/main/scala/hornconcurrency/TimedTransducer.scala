@@ -137,14 +137,16 @@ object TimedTransducer {
                               resetInstruction: Seq[Clock]) {
   }
 
-  case class TimedTransducer(name:String,
+  case class TimedTransducer(//TODO: breaks something?
+                             name:String,
                              locations: Seq[Location],
                              initialLocation: Location,
                              clocks: Seq[Clock],
                              inputLabels: Seq[InputLabel],
                              outputLabels: Seq[OutputLabel],
                              transitions: Seq[Transition],
-                             acceptanceCondition: Seq[(Seq[Location], Seq[Transition])] = Seq.empty
+                             acceptanceCondition: Seq[(Seq[Location], Seq[Transition])] = Seq.empty,
+                             rank_id: Option[Int]
                              )
 
   def location_to_acceptance_sets(l : Location, tt : TimedTransducer) : Seq[Int] = {
@@ -166,16 +168,20 @@ object TimedTransducer {
   case class Sequential(t1: TimedTransducerEquation, t2: TimedTransducerEquation)
     extends TimedTransducerEquation
 
-  def baseTransducer(kind: BaseTransducerKind,
+  def baseTransducer(
+                     kind: BaseTransducerKind,
                      input: InputLabel,
                      output: OutputLabel,
-                     const: Int): TimedTransducer =
-    baseTransducer(kind, Seq(input), output, const)
+                     const: Int,
+                     rank_id: Option[Int]): TimedTransducer =
+    baseTransducer(kind, Seq(input), output, const, rank_id)
 
-  def baseTransducer(kind: BaseTransducerKind,
+  def baseTransducer(
+                     kind: BaseTransducerKind,
                      inputs: Seq[InputLabel],
                      output: OutputLabel,
-                     const: Int): TimedTransducer = {
+                     const: Int,
+                     rank_id: Option[Int]): TimedTransducer = {
     import ClockConstraint._
     import Formula._
 
@@ -231,7 +237,9 @@ object TimedTransducer {
             trans(s0, s1, notU(input), q),
             trans(s1, s0, u(input), notQ),
             trans(s1, s1, notU(input), q)
-          ))
+          ),
+          Seq.empty,
+          rank_id)
 
       case BoolOr =>
         val input1 = inputName(0)
@@ -258,7 +266,9 @@ object TimedTransducer {
             trans(s0, s1, inputFalse, notQ),
             trans(s1, s0, inputTrue, q),
             trans(s1, s1, inputFalse, notQ)
-          ))
+          ),
+          Seq.empty,
+          rank_id)
 
       case Future =>
         val input = inputName(0)
@@ -293,7 +303,9 @@ object TimedTransducer {
             trans(s2, s2, u(input), q, Bound(c, Lt, a), reset = true),
             trans(s2, s3, u(input), notQ, Bound(c, Lt, a)),
             trans(s3, s1, notU(input), notQ, reset = true)
-          ))
+          ),
+          Seq.empty,
+          rank_id)
 
       case Past =>
         val input = inputName(0)
@@ -322,7 +334,9 @@ object TimedTransducer {
             trans(s1, s2, notU(input), notQ, Bound(c, Eq, a)),
             trans(s2, s0, Formula.True, notQ),
             trans(s2, s1, u(input), notQ)
-          ))
+          ),
+          Seq.empty,
+          rank_id)
 
       case Until =>
         val input1 = inputName(0)
@@ -362,7 +376,8 @@ object TimedTransducer {
             trans(s3, s2, u(input2), notQ),
             trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
           ),
-          Seq((Seq(s1), Seq.empty))
+          Seq((Seq(s1), Seq.empty)),
+          rank_id
           )
 
       case Since =>
@@ -402,7 +417,9 @@ object TimedTransducer {
             trans(s3, s1, notU(input2), notQ),
             trans(s3, s2, Formula.True, notQ),
             trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
-          ))
+          ),
+          Seq.empty,
+          rank_id)
     }
   }
 }

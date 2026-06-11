@@ -47,7 +47,8 @@ object MITLTransducerTranslator {
             kind: TimedTransducer.BaseTransducerKind,
             inner: MITL,
             output: Int,
-            bound: Int
+            bound: Int,
+            rank_id: Option[Int]
         ): TimedTransducerEquation = {
             def transducerFromInput(input: String) : TimedTransducer.Base = {
                 TimedTransducer.Base(
@@ -55,7 +56,8 @@ object MITLTransducerTranslator {
                             kind,
                             TimedTransducer.InputLabel(input),
                             TimedTransducer.OutputLabel(output.toString()),
-                            bound
+                            bound,
+                            rank_id
                         )
                     )
             }
@@ -74,7 +76,8 @@ object MITLTransducerTranslator {
             left: MITL,
             right: MITL,
             output: Int,
-            bound: Int
+            bound: Int,
+            rank_id: Option[Int]
         ): TimedTransducerEquation = {
             val (leftInput, leftTransducer) = InputFor(left)
             val (rightInput, rightTransducer) = InputFor(right)
@@ -90,7 +93,8 @@ object MITLTransducerTranslator {
                     kind,
                     Seq(TimedTransducer.InputLabel(leftInput), TimedTransducer.InputLabel(rightInput)),
                     TimedTransducer.OutputLabel(output.toString()),
-                    bound
+                    bound,
+                    rank_id
                 )
             )
             transducers match {
@@ -118,12 +122,17 @@ object MITLTransducerTranslator {
         */
         def translate(formula: MITL, outputSignal: Int): TimedTransducer.TimedTransducerEquation = {
             formula match {
-                case Negation(inner)                     => unary(TimedTransducer.BoolNot, inner, outputSignal, -1)
-                case Diamond(OpenOpen(Finite(0), Finite(a)), inner)  => unary(TimedTransducer.Future, inner, outputSignal, a)
-                case PDiamond(OpenOpen(Finite(0), Finite(a)), inner) => unary(TimedTransducer.Past, inner, outputSignal, a)
-                case Disjunction(left, right)            => binary(TimedTransducer.BoolOr, left, right, outputSignal, -1)
-                case U(OpenOpen(Finite(0), PosInfty), left, right)  => binary(TimedTransducer.Until, left, right, outputSignal, -1)
-                case S(OpenOpen(Finite(0), PosInfty), left, right)  => binary(TimedTransducer.Since, left, right, outputSignal, -1)
+                case Negation(inner) => unary(TimedTransducer.BoolNot, inner, outputSignal, -1, None)
+                case Diamond(OpenOpen(Finite(0), Finite(a)), inner, rank)  => 
+                    unary(TimedTransducer.Future, inner, outputSignal, a, rank)
+                case PDiamond(OpenOpen(Finite(0), Finite(a)), inner, rank) => 
+                    unary(TimedTransducer.Past, inner, outputSignal, a, rank)
+                case Disjunction(left, right) => 
+                    binary(TimedTransducer.BoolOr, left, right, outputSignal, -1, None)
+                case U(OpenOpen(Finite(0), PosInfty), left, right, rank)  => 
+                    binary(TimedTransducer.Until, left, right, outputSignal, -1, rank)
+                case S(OpenOpen(Finite(0), PosInfty), left, right, rank)  => 
+                    binary(TimedTransducer.Since, left, right, outputSignal, -1, rank)
                 case _ => ???
             }
         }

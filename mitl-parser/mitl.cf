@@ -7,76 +7,76 @@
 
 
 
-RankFunc. MitlDecl ::= "RANKING_FUNCTION" Integer ":" Expr ";" ;
-MitlFormula. MitlDecl ::= "MITL_SPEC" ":" Formula ";" ;
+RankDecl. MitlDecl ::= Ranking ;
+MitlFDecl. MitlDecl ::= Mitl ;
 
-
-
+MitlSpec. Mitl ::= "MITL_SPEC" ":" MFormula ";" ;
+RankFunc. Ranking ::=  "RANKING_FUNCTION" Integer ":" MExpr ";" ;
 --------------------------------------------------
--- Formula precedence
+-- MFormula precedence
 --------------------------------------------------
 
 
 -- Level 0: IFF (lowest precedence)
-FIff.
-Formula ::= Formula "<=>" Formula1 ;
-FBase.
-Formula ::= Formula1 ;
+MFIff.
+MFormula ::= MFormula "<=>" MFormula1 ;
+MFBase.
+MFormula ::= MFormula1 ;
 
 
 -- Level 1: IMPLICATION
-FImpl.
-Formula1 ::= Formula1 "==>" Formula2 ;
-_. Formula1 ::= Formula2;
+MFImpl.
+MFormula1 ::= MFormula1 "==>" MFormula2 ;
+_. MFormula1 ::= MFormula2;
 
 -- Level 2: OR
-FOr.
-Formula2 ::= Formula2 "||" Formula3 ;
-_. Formula2 ::= Formula3;
+MFOr.
+MFormula2 ::= MFormula2 "||" MFormula3 ;
+_. MFormula2 ::= MFormula3;
 
 -- Level 3: TEMPORAL BINARY (UNTIL / SINCE)
-FUntil.
-Formula3 ::= Formula3 "U" OptInterval Formula4 ;
+MFUntil.
+MFormula3 ::= MFormula3 OptRank "U" OptInterval MFormula4 ;
 
-FSince.
-Formula3 ::= Formula3 "S" OptInterval Formula4 ;
+MFSince.
+MFormula3 ::= MFormula3 OptRank "S" OptInterval MFormula4 ;
 
-_. Formula3 ::= Formula4;
+_. MFormula3 ::= MFormula4;
 
 -- Level 4: AND
-FAnd.
-Formula4 ::= Formula4 "&&" Formula5 ;
-_. Formula4 ::= Formula5;
+MFAnd.
+MFormula4 ::= MFormula4 "&&" MFormula5 ;
+_. MFormula4 ::= MFormula5;
 
 -- Level 5: UNARY (highest precedence)
 
 -- NOT
-FNot.
-Formula5 ::= "!" Formula5 ;
+MFNot.
+MFormula5 ::= "!" MFormula5 ;
 
 -- FUTURE operators
-FEventually.
-Formula5 ::= OptRank "F" OptInterval Formula6 ;
+MFEventually.
+MFormula5 ::= OptRank "F" OptInterval MFormula6 ;
 
-FGlobally.
-Formula5 ::= OptRank "G" OptInterval Formula6 ;
+MFGlobally.
+MFormula5 ::= OptRank "G" OptInterval MFormula6 ;
 
 -- PAST operators
-FHistorically.
-Formula5 ::= OptRank "H" OptInterval Formula6 ;
+MFHistorically.
+MFormula5 ::= OptRank "H" OptInterval MFormula6 ;
 
-FOnce.
-Formula5 ::= OptRank "P" OptInterval Formula6 ;
-UnOpBase. Formula5 ::= Formula6 ;
+MFOnce.
+MFormula5 ::= OptRank "P" OptInterval MFormula6 ;
+UnOpBase. MFormula5 ::= MFormula6 ;
 
 
--- atomic formulas
-FAtom.
-Formula6 ::= Atom ;
+-- atomic MFormulas
+MFAtom.
+MFormula6 ::= MAtom ;
 
 -- parentheses
 FPar.
-Formula6 ::= "(" Formula ")" ;
+MFormula6 ::= "(" MFormula ")" ;
 
 
 
@@ -98,20 +98,20 @@ NoInterval.
 OptInterval ::= ;
 
 WithInterval.
-OptInterval ::= "@" Interval ;
+OptInterval ::= "@" MInterval ;
 
 --------------------------------------------------
 -- Intervals
 --------------------------------------------------
 
 RightOpenInterval.
-Interval ::= "[" MitlBound "," MitlBound ")" ;
+MInterval ::= "[" MitlBound "," MitlBound ")" ;
 OpenInterval.
-Interval ::= "(" MitlBound "," MitlBound ")" ;
+MInterval ::= "(" MitlBound "," MitlBound ")" ;
 ClosedInterval.
-Interval ::= "[" MitlBound "," MitlBound "]" ;
+MInterval ::= "[" MitlBound "," MitlBound "]" ;
 LeftOpenInterval.
-Interval ::= "(" MitlBound "," MitlBound "]" ;
+MInterval ::= "(" MitlBound "," MitlBound "]" ;
 
 MitlBoundInt. MitlBound ::= Integer ;
 MitlBoundInfty. MitlBound ::= "infty" ;
@@ -121,38 +121,38 @@ MitlBoundInfty. MitlBound ::= "infty" ;
 --------------------------------------------------
 
 AtomRel.
-Atom ::= Expr RelOp Expr ;
+MAtom ::= MExpr MRelOp MExpr ;
 
 --------------------------------------------------
--- Arithmetic expressions
+-- Arithmetic MExpressions
 --------------------------------------------------
 
 
 -- Level 0: + -
-EAdd.
-Expr ::= Expr "+" Expr1 ;
+MEAdd.
+MExpr ::= MExpr "+" MExpr1 ;
 
-ESub.
-Expr ::= Expr "-" Expr1 ;
+MESub.
+MExpr ::= MExpr "-" MExpr1 ;
 
-_. Expr ::= Expr1 ;
+_. MExpr ::= MExpr1 ;
 
 -- Level 1: *
-EMul.
-Expr1 ::= Expr1 "*" Expr2 ;
-EDiv.
-Expr1 ::= Expr1 "/" Expr2 ;
-_. Expr1 ::= Expr2 ;
+MEMul.
+MExpr1 ::= MExpr1 "*" MExpr2 ;
+MEDiv.
+MExpr1 ::= MExpr1 "/" MExpr2 ;
+_. MExpr1 ::= MExpr2 ;
 
 -- Level 2: atoms
-EVar.
-Expr2 ::= Id ;
+MEVar.
+MExpr2 ::= Id ;
 
-EInt.
-Expr2 ::= Integer ;
+MEInt.
+MExpr2 ::= Integer ;
 
-EParen.
-Expr2 ::= "(" Expr ")" ;
+MEParen.
+MExpr2 ::= "(" MExpr ")" ;
 
 
 
@@ -161,12 +161,12 @@ Expr2 ::= "(" Expr ")" ;
 -- Relational operators
 --------------------------------------------------
 
-RelLt.  RelOp ::= "<" ;
-RelLe.  RelOp ::= "<=" ;
-RelGt.  RelOp ::= ">" ;
-RelGe.  RelOp ::= ">=" ;
-RelEq.  RelOp ::= "==" ;
-RelNeq. RelOp ::= "!=" ;
+MRelLt.  MRelOp ::= "<" ;
+MRelLe.  MRelOp ::= "<=" ;
+MRelGt.  MRelOp ::= ">" ;
+MRelGe.  MRelOp ::= ">=" ;
+MRelEq.  MRelOp ::= "==" ;
+MRelNeq. MRelOp ::= "!=" ;
 
 --------------------------------------------------
 -- Tokens
