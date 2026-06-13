@@ -345,8 +345,7 @@ object TimedTransducer {
         val s1 = loc("S1", andIn(u(input1), notU(input2)), q)
         val s2 = loc("S2", notU(input1), notQ)
         val s3 = loc("S3", andIn(u(input1), notU(input2)), notQ)
-        val locations = Seq(si, s0, s1, s2, s3)
-
+        val locations = Seq(si, s0, s1, s2, s3) 
         TimedTransducer(
           "UntilTransducer_" + inputs.mkString("_") + "_" + output.toString,
           locations,
@@ -376,7 +375,7 @@ object TimedTransducer {
             trans(s3, s2, u(input2), notQ),
             trans(s3, s3, andIn(notU(input1), notU(input2)), notQ)
           ),
-          Seq((Seq(s1), Seq.empty)),
+          Seq((Seq(s0, s2, s3), Seq.empty)),
           rank_id
           )
 
