@@ -156,7 +156,7 @@ object MITL {
                     Box(OpenOpen(0, c), left, rank),
                     Box(OpenClosed(0, c), 
                         Disjunction(
-                            left, 
+                            right,
                             Conjunction(
                                 left, 
                                 U(OpenOpen(0, PosInfty), left, right, rank))), rank)
@@ -178,42 +178,47 @@ object MITL {
             case S(OpenOpen(Finite(c), PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                PBox(OpenClosed(0, c), Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank)), rank)
+                nf(PBox(OpenClosed(0, c), Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank)), rank))
             case S(OpenOpen(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                Conjunction(
+                val res = Conjunction(
                     S(OpenOpen(a, PosInfty), l, r, rank),
                     PDiamond(OpenOpen(a,b), r, rank)
                 )
+                nf(res)
             case S(OpenClosed(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                Conjunction(
+                val res = Conjunction(
                     S(OpenOpen(a, PosInfty), l, r, rank),
                     PDiamond(OpenClosed(a,b), r, rank)
                 )
+                nf(res)
             case S(ClosedOpen(c, PosInfty), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                Conjunction(
+                val res = Conjunction(
                     PBox(OpenOpen(0, c), l, rank),
-                    PBox(OpenClosed(0, c), Disjunction(l, Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank))), rank)
+                    PBox(OpenClosed(0, c), Disjunction(r, Conjunction(l, S(OpenOpen(0, PosInfty), l, r, rank))), rank)
                 )
+                nf(res)
             case S(ClosedOpen(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                Conjunction(
+                val res = Conjunction(
                     S(ClosedOpen(a, PosInfty), l, r, rank),
                     PDiamond(ClosedOpen(a,b), r, rank)
                 )
+                nf(res)
             case S(ClosedClosed(a, b), left, right, rank) =>
                 val l = nf(left)
                 val r = nf(right)
-                Conjunction(
+                val res = Conjunction(
                     S(ClosedOpen(a, PosInfty), l, r, rank),
                     PDiamond(ClosedClosed(a,b), r, rank)
                 )
+                nf(res)
             case S(i, left, right, rank) => S(i, nf(left), nf(right), rank)
 
             case Diamond(OpenClosed(Finite(0), a), inner, rank) =>
@@ -248,30 +253,39 @@ object MITL {
             
             case PDiamond(OpenClosed(Finite(0), a), inner, rank) =>
                 val i = nf(inner)
-                Disjunction(
+                val res = Disjunction(
                     PDiamond(OpenOpen(0, a), i, rank),
                     Conjunction(
                         S(OpenOpen(0, PosInfty), PDiamond(OpenOpen(0, a), i, rank), PDiamond(OpenOpen(0, a), i, rank), rank),
                         S(OpenOpen(0, PosInfty), Negation(i), i, rank)
                     ))
+                nf(res)
             case PDiamond(ClosedOpen(0, a), inner, rank) =>
                 val i = nf(inner)
                 Disjunction(i, PDiamond(OpenOpen(0, a), i, rank))
             case PDiamond(ClosedClosed(0, a), inner, rank) =>
                 val i = nf(inner)
-                Disjunction(i, PDiamond(OpenClosed(0, a), i, rank))
+                nf(Disjunction(i, PDiamond(OpenClosed(0, a), i, rank)))
             case PDiamond(OpenOpen(Finite(a), Finite(b)), inner, rank) => 
-                PDiamond(OpenOpen(a, b-a), PBox(OpenOpen(a, b-a), PDiamond(OpenOpen(a, b), nf(inner), rank), rank), rank)
+                val c = math.min(a, b-a)
+                val res = PDiamond(OpenOpen(0, c), PBox(OpenOpen(0, c), PDiamond(OpenOpen(a-c, b-c), inner, rank), rank), rank)
+                nf(res)
             case PDiamond(OpenClosed(Finite(a), b), inner, rank) => 
-                PDiamond(OpenClosed(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(OpenClosed(a, b), nf(inner), rank), rank), rank)
+                val c = math.min(a, b-a)
+                val res = PDiamond(OpenClosed(0, c), PBox(ClosedOpen(0, c), PDiamond(OpenClosed(a-c, b-c), inner, rank), rank), rank)
+                nf(res)
             case PDiamond(ClosedOpen(a, Finite(b)), inner, rank) => 
-                PDiamond(ClosedOpen(a, b-a), PBox(OpenClosed(a, b-a), PDiamond(ClosedOpen(a, b), nf(inner), rank), rank), rank)
+                val c = math.min(a, b-a)
+                val res = PDiamond(ClosedOpen(0, c), PBox(OpenClosed(0, c), PDiamond(ClosedOpen(a-c, b-c), inner, rank), rank), rank)
+                nf(res)
             case PDiamond(ClosedClosed(a, b), inner, rank) => 
-                PDiamond(ClosedClosed(a, b-a), PBox(ClosedClosed(a, b-a), PDiamond(ClosedClosed(a, b), nf(inner), rank), rank), rank)
+                val c = math.min(a, b-a)
+                val res = PDiamond(ClosedClosed(0, c), PBox(ClosedClosed(0, c), PDiamond(ClosedClosed(a-c, b-c), inner, rank), rank), rank)
+                nf(res)
             case PDiamond(interval, inner, rank) => S(interval, True, nf(inner), rank)
             case Box(interval, inner, rank) => nf(Negation(Diamond(interval, Negation(inner), rank)))
             // case Box(interval, inner) => Negation(U(interval, True, Negation(nf(inner))))
-            case PBox(interval, inner, rank) => Negation(S(interval, True, Negation(nf(inner)), rank))
+            case PBox(interval, inner, rank) => nf(Negation(PDiamond(interval, Negation(inner), rank)))
         }
     }
 }

@@ -30,9 +30,63 @@
 package hornconcurrency
 
 import org.scalatest._
+import ap.basetypes.HeapCollector
 
 class MITLTests extends FlatSpec {
   import MITL._
+
+  private val noRank: Option[Int] = None
+
+  private def nfConjunction(left: MITL, right: MITL): MITL =
+    Negation(Disjunction(Negation(left), Negation(right)))
+
+  private def diamondOpenClosed0(right: Int, inner: MITL): MITL = {
+    val open = Diamond(OpenOpen(0, right), inner, noRank)
+    Disjunction(
+      open,
+      nfConjunction(
+        U(OpenOpen(0, PosInfty), open, open, noRank),
+        U(OpenOpen(0, PosInfty), Negation(inner), inner, noRank)))
+  }
+
+  private def diamondClosedOpen0(right: Int, inner: MITL): MITL =
+    Disjunction(inner, Diamond(OpenOpen(0, right), inner, noRank))
+
+  private def diamondClosedClosed0(right: Int, inner: MITL): MITL =
+    Disjunction(inner, diamondOpenClosed0(right, inner))
+
+  private def pDiamondOpenClosed0(right: Int, inner: MITL): MITL = {
+    val open = PDiamond(OpenOpen(0, right), inner, noRank)
+    Disjunction(
+      open,
+      nfConjunction(
+        S(OpenOpen(0, PosInfty), open, open, noRank),
+        S(OpenOpen(0, PosInfty), Negation(inner), inner, noRank)))
+  }
+
+  private def pDiamondClosedOpen0(right: Int, inner: MITL): MITL =
+    Disjunction(inner, PDiamond(OpenOpen(0, right), inner, noRank))
+
+  private def pDiamondClosedClosed0(right: Int, inner: MITL): MITL =
+    Disjunction(inner, pDiamondOpenClosed0(right, inner))
+
+  private def boxOpenOpen0(right: Int, inner: MITL): MITL =
+    Negation(Diamond(OpenOpen(0, right), Negation(inner), noRank))
+
+  private def boxOpenClosed0(right: Int, inner: MITL): MITL =
+    Negation(diamondOpenClosed0(right, Negation(inner)))
+
+  private def pBoxOpenOpen0(right: Int, inner: MITL): MITL =
+    Negation(PDiamond(OpenOpen(0, right), Negation(inner), noRank))
+
+  private def pBoxOpenClosed0(right: Int, inner: MITL): MITL =
+    Negation(pDiamondOpenClosed0(right, Negation(inner)))
+
+  private def nonStrictUntil(left: MITL, right: MITL): MITL =
+    Disjunction(right, nfConjunction(left, U(OpenOpen(0, PosInfty), left, right, noRank)))
+
+  private def nonStrictSince(left: MITL, right: MITL): MITL =
+    Disjunction(right, nfConjunction(left, S(OpenOpen(0, PosInfty), left, right, noRank)))
 
   it should "translate conjunction correctly" in {
     val ap1 = AP("a")
@@ -64,465 +118,277 @@ class MITLTests extends FlatSpec {
     assert(d == Negation(Disjunction(Negation(ap1), Negation(Disjunction(Negation(ap1), ap2)))))
   }
 
-  it should "translate diamond_(0,1) correctly" in {
+  it should "translate diamond_[0,1) with normalized AP correctly" in {
     val ap = AP("a")
 
-    val d = Diamond(ClosedOpen(0, 1), ap)
+    val d = Diamond(ClosedOpen(0, 1), ap, None)
     val translated = nf(d)
 
-    assert(translated == Disjunction(AP("a"), Diamond(OpenOpen(0, 1), AP("a"))))
+    assert(translated == Disjunction(AP("a"), Diamond(OpenOpen(0, 1), ap, None)))
   }
 
   it should "translate diamond_(2,5) correctly" in {
     val ap = AP("a")
 
-    val d = Diamond(OpenOpen(2, 5), ap)
+    val d = Diamond(OpenOpen(2, 5), ap, None)
     val translated = nf(d)
 
-    assert(translated == Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), ap))))))
+    assert(translated == Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), ap, None)), None)), None))
   }
 
-  // it should "translate diamond_(0,1] correctly" in {
-  //   val ap = AP("a")
-
-  //   val d = Diamond(OpenClosed(0, 1), ap)
-  //   val translated = nf(d)
-
-  //   assert(translated == 
-  //     Disjunction(
-  //       Diamond(OpenOpen(0, 1), AP("a")),
-  //       Conjunction(
-  //         U(OpenOpen(0, PosInfty), Diamond(OpenOpen(0, 1), AP("a")), Diamond(OpenOpen(0, 1), AP("a"))),
-  //         U(OpenOpen(0, PosInfty), Negation(AP("a")), AP("a"))
-  //       )
-  //     )
-  //   )
-  // }
-
-  // it should "translate diamond_(2,5] correctly" in {
-  //   val ap = AP("a")
-
-  //   val d = Diamond(OpenClosed(2, 5), ap)
-  //   val translated = nf(d)
-
-  //   val psi = Disjunction(
-  //     Diamond(OpenOpen(0, 3), AP("a")),
-  //     Conjunction(
-  //       U(OpenOpen(0, PosInfty),
-  //         Diamond(OpenOpen(0, 3), AP("a")),
-  //         Diamond(OpenOpen(0, 3), AP("a"))
-  //       ),
-  //       U(OpenOpen(0, PosInfty),
-  //         Negation(AP("a")),
-  //         AP("a")
-  //       )
-  //     )
-  //   )
-
-  //   val boxInner = Negation(
-  //     Disjunction(
-  //       Negation(psi),
-  //       Diamond(OpenOpen(0, 2), Negation(psi))
-  //     )
-  //   )
-
-  //   val phi = Diamond(OpenOpen(0, 2), boxInner)
-
-  //   assert(translated ==
-  //     Disjunction(
-  //       phi,
-  //       Conjunction(
-  //         U(OpenOpen(0, PosInfty), phi, phi),
-  //         U(OpenOpen(0, PosInfty), Negation(boxInner), boxInner)
-  //       )
-  //     ))
-  // }
-
-  it should "translate subexpr correctly" in {
+  it should "translate diamond_(0,1] correctly" in {
     val ap = AP("a")
 
-    val d = Negation(Diamond(ClosedOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), ap))))
+    val d = Diamond(OpenClosed(0, 1), ap, noRank)
+    val translated = nf(d)
+
+    assert(translated == diamondOpenClosed0(1, ap))
+  }
+
+  it should "translate diamond_(2,5] correctly" in {
+    val ap = AP("a")
+
+    val d = Diamond(OpenClosed(2, 5), ap, noRank)
+    val translated = nf(d)
+
+    val psi = diamondOpenClosed0(3, ap)
+    val boxInner = Negation(diamondClosedOpen0(2, Negation(psi)))
+
+    assert(translated == diamondOpenClosed0(2, boxInner))
+  }
+
+  it should "translate negated diamond with nested open diamond correctly" in {
+    val ap = AP("a")
+
+    val d = Negation(Diamond(ClosedOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), ap, None)), None))
     val translated = nf(d)
 
     assert(translated ==
       Negation(
         Disjunction(
-          Negation(Diamond(OpenOpen(0, 3), AP("a"))),
-          Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), AP("a"))))
+          Negation(Diamond(OpenOpen(0, 3), AP("a"), None)),
+          Diamond(OpenOpen(0, 2), Negation(Diamond(OpenOpen(0, 3), AP("a"), None)), None)
         )
       ))
   }
 
-  // it should "translate subexpr2 correctly" in {
-  //   val ap = AP("a")
+  it should "translate open-closed diamond with nested closed-open diamond correctly" in {
+    val ap = AP("a")
 
-  //   val d = Diamond(OpenClosed(0, 2), Negation(Diamond(ClosedOpen(0, 2), ap)))
-  //   val translated = nf(d)
+    val d = Diamond(OpenClosed(0, 2), Negation(Diamond(ClosedOpen(0, 2), ap, noRank)), noRank)
+    val translated = nf(d)
 
-  //   val inner = Negation(Disjunction(AP("a"), Diamond(OpenOpen(0, 2), AP("a"))))
+    val inner = Negation(Disjunction(AP("a"), Diamond(OpenOpen(0, 2), AP("a"), noRank)))
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       Diamond(OpenOpen(0, 2), inner),
-  //       Conjunction(
-  //         U(OpenOpen(0, PosInfty),
-  //           Diamond(OpenOpen(0, 2), inner),
-  //           Diamond(OpenOpen(0, 2), inner)
-  //         ),
-  //         U(OpenOpen(0, PosInfty),
-  //           Negation(inner),
-  //           inner
-  //         )
-  //       )
-  //     ))
-  // }
+    assert(translated == diamondOpenClosed0(2, inner))
+  }
 
   it should "translate diamond_[0,1) correctly" in {
     val ap = AP("a")
 
-    val d = Diamond(ClosedOpen(0, 1), ap)
+    val d = Diamond(ClosedOpen(0, 1), ap, None)
     val translated = nf(d)
 
-    assert(translated == Disjunction(AP("a"), Diamond(OpenOpen(0, 1), AP("a"))))
+    assert(translated == Disjunction(AP("a"), Diamond(OpenOpen(0, 1), AP("a"), None)))
   }
 
-  // it should "translate diamond_[2,5) correctly" in {
-  //   val ap = AP("a")
+  it should "translate diamond_[2,5) correctly" in {
+    val ap = AP("a")
 
-  //   val d = Diamond(ClosedOpen(2, 5), ap)
-  //   val translated = nf(d)
+    val d = Diamond(ClosedOpen(2, 5), ap, noRank)
+    val translated = nf(d)
 
-  //   val psi = Disjunction(AP("a"), Diamond(OpenOpen(0, 3), AP("a")))
-  //   val boxInner = Negation(
-  //     Disjunction(
-  //       Diamond(OpenOpen(0, 2), Negation(psi)),
-  //       Conjunction(
-  //         U(OpenOpen(0, PosInfty),
-  //           Diamond(OpenOpen(0, 2), Negation(psi)),
-  //           Diamond(OpenOpen(0, 2), Negation(psi))
-  //         ),
-  //         U(OpenOpen(0, PosInfty),
-  //           Negation(Negation(psi)),
-  //           Negation(psi)
-  //         )
-  //       )
-  //     )
-  //   )
+    val psi = diamondClosedOpen0(3, ap)
+    val boxInner = Negation(diamondOpenClosed0(2, Negation(psi)))
 
-  //   assert(translated == Disjunction(boxInner, Diamond(OpenOpen(0, 2), boxInner)))
-  // }
+    assert(translated == diamondClosedOpen0(2, boxInner))
+  }
 
-  // it should "translate diamond_[0,1] correctly" in {
-  //   val ap = AP("a")
+  it should "translate diamond_[0,1] correctly" in {
+    val ap = AP("a")
 
-  //   val d = Diamond(ClosedClosed(0, 1), ap)
-  //   val translated = nf(d)
+    val d = Diamond(ClosedClosed(0, 1), ap, noRank)
+    val translated = nf(d)
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       AP("a"),
-  //       Disjunction(
-  //         Diamond(OpenOpen(0, 1), AP("a")),
-  //         Conjunction(
-  //           U(OpenOpen(0, PosInfty),
-  //             Diamond(OpenOpen(0, 1), AP("a")),
-  //             Diamond(OpenOpen(0, 1), AP("a"))
-  //           ),
-  //           U(OpenOpen(0, PosInfty),
-  //             Negation(AP("a")),
-  //             AP("a")
-  //           )
-  //         )
-  //       )
-  //     ))
-  // }
+    assert(translated == diamondClosedClosed0(1, ap))
+  }
 
-  // it should "translate diamond_[2,5] correctly" in {
-  //   val ap = AP("a")
+  it should "translate diamond_[2,5] correctly" in {
+    val ap = AP("a")
 
-  //   val d = Diamond(ClosedClosed(2, 5), ap)
-  //   val translated = nf(d)
+    val d = Diamond(ClosedClosed(2, 5), ap, noRank)
+    val translated = nf(d)
 
-  //   val psi = Disjunction(
-  //     AP("a"),
-  //     Disjunction(
-  //       Diamond(OpenOpen(0, 3), AP("a")),
-  //       Conjunction(
-  //         U(OpenOpen(0, PosInfty),
-  //           Diamond(OpenOpen(0, 3), AP("a")),
-  //           Diamond(OpenOpen(0, 3), AP("a"))
-  //         ),
-  //         U(OpenOpen(0, PosInfty),
-  //           Negation(AP("a")),
-  //           AP("a")
-  //         )
-  //       )
-  //     )
-  //   )
+    val psi = diamondClosedClosed0(3, ap)
+    val boxInner = Negation(diamondClosedClosed0(2, Negation(psi)))
 
-  //   val left = Negation(psi)
-  //   val right = Disjunction(
-  //     Diamond(OpenOpen(0, 2), Negation(psi)),
-  //     Conjunction(
-  //       U(OpenOpen(0, PosInfty),
-  //         Diamond(OpenOpen(0, 2), Negation(psi)),
-  //         Diamond(OpenOpen(0, 2), Negation(psi))
-  //       ),
-  //       U(OpenOpen(0, PosInfty),
-  //         Negation(Negation(psi)),
-  //         Negation(psi)
-  //       )
-  //     )
-  //   )
+    assert(translated == diamondClosedClosed0(2, boxInner))
+  }
 
-  //   val boxInner = Negation(Disjunction(left, right))
+  it should "translate past diamond_(0,1] correctly" in {
+    val ap = AP("a")
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       boxInner,
-  //       Disjunction(
-  //         Diamond(OpenOpen(0, 2), boxInner),
-  //         Conjunction(
-  //           U(OpenOpen(0, PosInfty),
-  //             Diamond(OpenOpen(0, 2), boxInner),
-  //             Diamond(OpenOpen(0, 2), boxInner)
-  //           ),
-  //           U(OpenOpen(0, PosInfty),
-  //             Negation(boxInner),
-  //             boxInner
-  //           )
-  //         )
-  //       )
-  //     ))
-  // }
+    val d = PDiamond(OpenClosed(0, 1), ap, noRank)
+    val translated = nf(d)
 
-  // it should "translate past diamond_(0,1] correctly" in {
-  //   val ap = AP("a")
+    assert(translated == pDiamondOpenClosed0(1, ap))
+  }
 
-  //   val d = PDiamond(OpenClosed(0, 1), ap)
-  //   val translated = nf(d)
+  it should "translate past diamond_(2,5) correctly" in {
+    val ap = AP("a")
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       PDiamond(OpenOpen(0, 1), AP("a")),
-  //       Conjunction(
-  //         S(OpenOpen(0, PosInfty), PDiamond(OpenOpen(0, 1), AP("a")), PDiamond(OpenOpen(0, 1), AP("a"))),
-  //         S(OpenOpen(0, PosInfty), Negation(AP("a")), AP("a"))
-  //       )
-  //     )
-  //   )
-  // }
+    val d = PDiamond(OpenOpen(2, 5), ap, noRank)
+    val translated = nf(d)
 
-  // it should "translate past diamond_(2,5) correctly" in {
-  //   val ap = AP("a")
+    assert(translated == PDiamond(OpenOpen(0, 2), Negation(PDiamond(OpenOpen(0, 2), Negation(PDiamond(OpenOpen(0, 3), ap, noRank)), noRank)), noRank))
+  }
 
-  //   val d = PDiamond(OpenOpen(2, 5), ap)
-  //   val translated = nf(d)
+  it should "translate past diamond_(2,5] correctly" in {
+    val ap = AP("a")
 
-  //   assert(translated == PDiamond(OpenOpen(0, 2), Negation(PDiamond(OpenOpen(0, 2), Negation(PDiamond(OpenOpen(0, 3), ap))))))
-  // }
+    val d = PDiamond(OpenClosed(2, 5), ap, noRank)
+    val translated = nf(d)
 
-  // it should "translate past diamond_(2,5] correctly" in {
-  //   val ap = AP("a")
+    val psi = pDiamondOpenClosed0(3, ap)
+    val boxInner = Negation(pDiamondClosedOpen0(2, Negation(psi)))
 
-  //   val d = PDiamond(OpenClosed(2, 5), ap)
-  //   val translated = nf(d)
+    assert(translated == pDiamondOpenClosed0(2, boxInner))
+  }
 
-  //   val psi = Disjunction(
-  //     PDiamond(OpenOpen(0, 3), AP("a")),
-  //     Conjunction(
-  //       S(OpenOpen(0, PosInfty),
-  //         PDiamond(OpenOpen(0, 3), AP("a")),
-  //         PDiamond(OpenOpen(0, 3), AP("a"))
-  //       ),
-  //       S(OpenOpen(0, PosInfty),
-  //         Negation(AP("a")),
-  //         AP("a")
-  //       )
-  //     )
-  //   )
+  it should "translate past diamond_[2,5) correctly" in {
+    val ap = AP("a")
 
-  //   val boxInner = Negation(
-  //     Disjunction(
-  //       Negation(psi),
-  //       PDiamond(OpenOpen(0, 2), Negation(psi))
-  //     )
-  //   )
+    val d = PDiamond(ClosedOpen(2, 5), ap, noRank)
+    val translated = nf(d)
 
-  //   val phi = PDiamond(OpenOpen(0, 2), boxInner)
+    val psi = pDiamondClosedOpen0(3, ap)
+    val boxInner = Negation(pDiamondOpenClosed0(2, Negation(psi)))
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       phi,
-  //       Conjunction(
-  //         S(OpenOpen(0, PosInfty), phi, phi),
-  //         S(OpenOpen(0, PosInfty), Negation(boxInner), boxInner)
-  //       )
-  //     ))
-  // }
+    assert(translated == pDiamondClosedOpen0(2, boxInner))
+  }
 
-  // it should "translate past diamond_[2,5) correctly" in {
-  //   val ap = AP("a")
+  it should "translate past diamond_[2,5] correctly" in {
+    val ap = AP("a")
 
-  //   val d = PDiamond(ClosedOpen(2, 5), ap)
-  //   val translated = nf(d)
+    val d = PDiamond(ClosedClosed(2, 5), ap, noRank)
+    val translated = nf(d)
+    val psi = pDiamondClosedClosed0(3, ap)
+    val boxInner = Negation(pDiamondClosedClosed0(2, Negation(psi)))
 
-  //   val psi = Disjunction(AP("a"), PDiamond(OpenOpen(0, 3), AP("a")))
-  //   val boxInner = Negation(
-  //     Disjunction(
-  //       PDiamond(OpenOpen(0, 2), Negation(psi)),
-  //       Conjunction(
-  //         S(OpenOpen(0, PosInfty),
-  //           PDiamond(OpenOpen(0, 2), Negation(psi)),
-  //           PDiamond(OpenOpen(0, 2), Negation(psi))
-  //         ),
-  //         S(OpenOpen(0, PosInfty),
-  //           Negation(Negation(psi)),
-  //           Negation(psi)
-  //         )
-  //       )
-  //     )
-  //   )
+    assert(translated == pDiamondClosedClosed0(2, boxInner))
+  }
 
-  //   assert(translated == Disjunction(boxInner, PDiamond(OpenOpen(0, 2), boxInner)))
-  // }
+  it should "translate until_(0,1] correctly" in {
+    val left = AP("a")
+    val right = AP("b")
 
-  // it should "translate past diamond_[2,5] correctly" in {
-  //   val ap = AP("a")
+    val d = U(OpenClosed(0, 1), left, right, noRank)
+    val translated = nf(d)
 
-  //   val d = PDiamond(ClosedClosed(2, 5), ap)
-  //   val translated = nf(d)
+    assert(translated ==
+      nfConjunction(
+        U(OpenOpen(0, PosInfty), AP("a"), AP("b"), noRank),
+        diamondOpenClosed0(1, AP("b"))))
+  }
 
-  //   val psi = Disjunction(
-  //     AP("a"),
-  //     Disjunction(
-  //       PDiamond(OpenOpen(0, 3), AP("a")),
-  //       Conjunction(
-  //         S(OpenOpen(0, PosInfty),
-  //           PDiamond(OpenOpen(0, 3), AP("a")),
-  //           PDiamond(OpenOpen(0, 3), AP("a"))
-  //         ),
-  //         S(OpenOpen(0, PosInfty),
-  //           Negation(AP("a")),
-  //           AP("a")
-  //         )
-  //       )
-  //     )
-  //   )
+  it should "translate until_(2,5) correctly" in {
+    val left = AP("a")
+    val right = AP("b")
 
-  //   val left = Negation(psi)
-  //   val right = Disjunction(
-  //     PDiamond(OpenOpen(0, 2), Negation(psi)),
-  //     Conjunction(
-  //       S(OpenOpen(0, PosInfty),
-  //         PDiamond(OpenOpen(0, 2), Negation(psi)),
-  //         PDiamond(OpenOpen(0, 2), Negation(psi))
-  //       ),
-  //       S(OpenOpen(0, PosInfty),
-  //         Negation(Negation(psi)),
-  //         Negation(psi)
-  //       )
-  //     )
-  //   )
+    val d = U(OpenOpen(2, 5), left, right, noRank)
+    val translated = nf(d)
+    val unbounded = boxOpenClosed0(2, nfConjunction(left, U(OpenOpen(0, PosInfty), left, right, noRank)))
+    val eventual = Diamond(OpenOpen(0, 2), boxOpenOpen0(2, Diamond(OpenOpen(0, 3), right, noRank)), noRank)
 
-  //   val boxInner = Negation(Disjunction(left, right))
+    assert(translated == nfConjunction(unbounded, eventual))
+  }
 
-  //   assert(translated ==
-  //     Disjunction(
-  //       boxInner,
-  //       Disjunction(
-  //         PDiamond(OpenOpen(0, 2), boxInner),
-  //         Conjunction(
-  //           S(OpenOpen(0, PosInfty),
-  //             PDiamond(OpenOpen(0, 2), boxInner),
-  //             PDiamond(OpenOpen(0, 2), boxInner)
-  //           ),
-  //           S(OpenOpen(0, PosInfty),
-  //             Negation(boxInner),
-  //             boxInner
-  //           )
-  //         )
-  //       )
-  //     ))
-  // }
+  it should "translate until_[2,infty) correctly" in {
+    val left = AP("a")
+    val right = AP("b")
 
-  // it should "translate until_(0,1] correctly" in {
-  //   val left = AP("a")
-  //   val right = AP("b")
+    val d = U(ClosedOpen(2, PosInfty), left, right, noRank)
+    val translated = nf(d)
 
-  //   val d = U(OpenClosed(0, 1), left, right)
-  //   val translated = nf(d)
+    assert(translated ==
+      nfConjunction(
+        boxOpenOpen0(2, left),
+        boxOpenClosed0(2, nonStrictUntil(left, right))))
+  }
 
-  //   assert(translated ==
-  //     Conjunction(
-  //       U(OpenOpen(0, PosInfty), AP("a"), AP("b")),
-  //       Disjunction(
-  //         Diamond(OpenOpen(0, 1), AP("b")),
-  //         Conjunction(
-  //           U(OpenOpen(0, PosInfty), Diamond(OpenOpen(0, 1), AP("b")), Diamond(OpenOpen(0, 1), AP("b"))),
-  //           U(OpenOpen(0, PosInfty), Negation(AP("b")), AP("b"))
-  //         )
-  //       )
-  //     )
-  //   )
-  // }
+  it should "translate since_(0,1] correctly" in {
+    val left = AP("a")
+    val right = AP("b")
 
-  // it should "translate since_(0,1] correctly" in {
-  //   val left = AP("a")
-  //   val right = AP("b")
+    val d = S(OpenClosed(0, 1), left, right, noRank)
+    val translated = nf(d)
 
-  //   val d = S(OpenClosed(0, 1), left, right)
-  //   val translated = nf(d)
+    assert(translated ==
+      nfConjunction(
+        S(OpenOpen(0, PosInfty), AP("a"), AP("b"), noRank),
+        pDiamondOpenClosed0(1, AP("b"))))
+  }
 
-  //   assert(translated ==
-  //     Conjunction(
-  //       S(OpenOpen(0, PosInfty), AP("a"), AP("b")),
-  //       Disjunction(
-  //         PDiamond(OpenOpen(0, 1), AP("b")),
-  //         Conjunction(
-  //           S(OpenOpen(0, PosInfty), PDiamond(OpenOpen(0, 1), AP("b")), PDiamond(OpenOpen(0, 1), AP("b"))),
-  //           S(OpenOpen(0, PosInfty), Negation(AP("b")), AP("b"))
-  //         )
-  //       )
-  //     )
-  //   )
-  // }
+  it should "translate since_(2,5) correctly" in {
+    val left = AP("a")
+    val right = AP("b")
+
+    val d = S(OpenOpen(2, 5), left, right, noRank)
+    val translated = nf(d)
+    val unbounded = pBoxOpenClosed0(2, nfConjunction(left, S(OpenOpen(0, PosInfty), left, right, noRank)))
+    val eventual = PDiamond(OpenOpen(0, 2), pBoxOpenOpen0(2, PDiamond(OpenOpen(0, 3), right, noRank)), noRank)
+
+    assert(translated == nfConjunction(unbounded, eventual))
+  }
+
+  it should "translate since_[2,infty) correctly" in {
+    val left = AP("a")
+    val right = AP("b")
+
+    val d = S(ClosedOpen(2, PosInfty), left, right, noRank)
+    val translated = nf(d)
+
+    assert(translated ==
+      nfConjunction(
+        pBoxOpenOpen0(2, left),
+        pBoxOpenClosed0(2, nonStrictSince(left, right))))
+  }
 
     it should "translate past diamond correctly" in {
     val ap = AP("a")
 
-    val d = PDiamond(ClosedOpen(0, 1), ap)
+    val d = PDiamond(ClosedOpen(0, 1), ap, None)
     val translated = nf(d)
 
-    assert(translated == Disjunction(AP("a"), PDiamond(OpenOpen(0, 1), AP("a"))))
+    assert(translated == Disjunction(AP("a"), PDiamond(OpenOpen(0, 1), AP("a"), None)))
   }
 
     it should "translate box correctly" in {
     val ap = AP("a")
 
-    val d = Box(ClosedOpen(0, 1), ap)
+    val d = Box(ClosedOpen(0, 1), ap, None)
     val translated = nf(d)
 
-    assert(translated == Negation(Disjunction(Negation(AP("a")), Diamond(OpenOpen(0, 1), Negation(AP("a"))))))
+    assert(translated == Negation(Disjunction(Negation(AP("a")), Diamond(OpenOpen(0, 1), Negation(AP("a")), None))))
   }
 
     it should "translate past box correctly" in {
     val ap = AP("a")
 
-    val d = PBox(ClosedOpen(0, 1), ap)
+    val d = PBox(ClosedOpen(0, 1), ap, None)
     val translated = nf(d)
 
-    assert(translated == Negation(S(ClosedOpen(0, 1), True, Negation(AP("a")))))
+    assert(translated == Negation(Disjunction(Negation(AP("a")), PDiamond(OpenOpen(0, 1), Negation(AP("a")), None))))
   }
 
-  // it should "translate complex formulae correctly" in {
-  //   val a = AP("a")
-  //   val b = AP("b")
+  it should "translate complex formulae correctly" in {
+    val a = AP("a")
+    val b = AP("b")
 
-  //   val f = Implication(PBox(ClosedClosed(0, 100), a), b)
-  //   val translated = nf(f)
+    val f = Implication(PBox(ClosedClosed(0, 100), a, noRank), b)
+    val translated = nf(f)
 
-  //   assert(translated == Implication(Negation(S(ClosedClosed(0, 100), True, Negation(AP("a")))), AP("b")))
 
-  // }
+    assert(translated == Disjunction(Negation(Negation(pDiamondClosedClosed0(100, Negation(AP("a"))))), AP("b")))
+  }
 }
