@@ -204,12 +204,38 @@ object TimedTransducerEncoder {
             .filter(_.source != transducer.initialLocation)
             .map(t => transitionClause(t, locationPredicateMap(t.source.label)))
 
+        val acceptSorts = // We need to add global clock and signal terms as args
+            List(
+                Rationals.dom // global clock
+            ) ++
+            globalSignalTerms.map(_ => Sort.Bool) :+ Sort.Integer // global input/output signals
         // The argument is the index of the acceptance set
-        val acceptPred = MonoSortedPredicate(prefix + "Accept",List(Sort.Integer))
+        val acceptPred = MonoSortedPredicate(prefix + "_Accept", acceptSorts)
         /* For each acceptance set with index idx,
         acceptPred(idx) holds if the current transition or target location is 
         in the acceptance set. */ 
-        val acceptClauses = Seq.empty[(HornClauses.Clause, NoSync.type)]
+        val acceptClauses = transducer.acceptanceCondition.zipWithIndex.flatMap{
+            case ((acc_loc, acc_trans), idx) => 
+            val loc_clauses = acc_loc.map{case l => 
+            val invArgs = Seq(IConstant(C)) ++ globalSignals ++ clockArgs
+            val acceptArgs: Seq[ITerm] = Seq(IConstant(C)) ++ globalSignals ++ Seq(i(idx))
+            (acceptPred(acceptArgs: _*) :- locationPredicateMap(l.label)(invArgs: _*), NoSync)
+            }
+            val trans_clauses = acc_trans.map{ case t => 
+                 val postClockArgs = transducer.clocks.map { clock =>
+                    if (t.resetInstruction contains clock) IConstant(C) else IConstant(clockEnvironment(clock))
+                }
+                val preStepArgs: Seq[ITerm] =
+                    Seq(IConstant(C)) ++ globalSignals ++ clockArgs
+                val postStepArgs: Seq[ITerm] =
+                    Seq(IConstant(C)) ++ globalSignals ++ postClockArgs
+                val acceptArgs: Seq[ITerm] = Seq(IConstant(C)) ++ globalSignals ++ Seq(i(idx))
+                val tguard = locationPredicateMap(t.source.label)(preStepArgs: _*) &
+                             locationPredicateMap(t.target.label)(postStepArgs: _*)
+                (acceptPred(acceptArgs: _*) :- tguard  , NoSync)
+            }
+            loc_clauses ++ trans_clauses
+        }
         
         val clauses = firstStepTransitionClauses ++ transitionClauses ++ acceptClauses
         EncodedTransducer(
