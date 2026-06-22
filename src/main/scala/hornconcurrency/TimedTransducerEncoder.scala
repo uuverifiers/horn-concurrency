@@ -58,6 +58,7 @@ object TimedTransducerEncoder {
                                  progressBlock: ProgressBlock,
                                  configurations: Map[String, Predicate],
                                  invariantClauses: Seq[HornClauses.Clause],
+                                 acceptClauses: Seq[HornClauses.Clause],
                                  globalSignalLabels: Seq[String],
                                  globalSignalTerms: Seq[ConstantTerm],
                                  clockTerms: Seq[ConstantTerm]
@@ -66,7 +67,7 @@ object TimedTransducerEncoder {
     // global clock
     val C = Rationals.dom.newConstant("C")
 
-    def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation): 
+    def encodeTransducerEquation(teq : TimedTransducer.TimedTransducerEquation, apMap: Map[String, IFormula]): 
         Seq[EncodedTransducer]= {
         
         //Converts sequenctial composition to product, returns a list of all base transducers that should be composed woht product
@@ -98,6 +99,21 @@ object TimedTransducerEncoder {
                 globalSignalEnvironment)
         }
         encodedTransducers
+    }
+
+    def toSignalSystem(ets: Seq[EncodedTransducer]) : SignalSystem = {
+        val globalVarNum = ets.head.globalSignalTerms.size
+        
+        val system = SignalSystem(
+            ets.map(t => (t.clauses, System.Singleton)),
+            globalVarNum,
+            Seq(),
+            RationalTime(0),
+            (1 until globalVarNum).toSet,
+            ets.map(t => List(t.progressBlock)),
+            ets.flatMap(_.acceptClauses)
+        )
+        system
     }
 
     /*  Each transducer is supposed to run in parallel using global signals to synchronize them.
@@ -210,16 +226,27 @@ object TimedTransducerEncoder {
             ) ++
             globalSignalTerms.map(_ => Sort.Bool) :+ Sort.Integer // global input/output signals
         // The argument is the index of the acceptance set
+        val acceptName = transducer.rank_id match {
+            case Some(id) => prefix ++ "_accept_" ++ "rank_" ++ id.toString 
+            case None => prefix ++ "_accept_NoRank"
+        }
         val acceptPred = MonoSortedPredicate(prefix + "_Accept", acceptSorts)
         /* For each acceptance set with index idx,
         acceptPred(idx) holds if the current transition or target location is 
         in the acceptance set. */ 
-        val acceptClauses = transducer.acceptanceCondition.zipWithIndex.flatMap{
+        val acceptanceCondition = if (transducer.acceptanceCondition.isEmpty) {
+            //If empty accept condition, we treat every location and transition as accepting
+            Seq((transducer.locations.filter(_ != transducer.initialLocation), 
+                transducer.transitions.filter(_.source != transducer.initialLocation)))
+        } else {
+            transducer.acceptanceCondition
+        }
+        val acceptClauses = acceptanceCondition.zipWithIndex.flatMap{
             case ((acc_loc, acc_trans), idx) => 
             val loc_clauses = acc_loc.map{case l => 
             val invArgs = Seq(IConstant(C)) ++ globalSignals ++ clockArgs
             val acceptArgs: Seq[ITerm] = Seq(IConstant(C)) ++ globalSignals ++ Seq(i(idx))
-            (acceptPred(acceptArgs: _*) :- locationPredicateMap(l.label)(invArgs: _*), NoSync)
+            (acceptPred(acceptArgs: _*) :- locationPredicateMap(l.label)(invArgs: _*))
             }
             val trans_clauses = acc_trans.map{ case t => 
                  val postClockArgs = transducer.clocks.map { clock =>
@@ -232,23 +259,24 @@ object TimedTransducerEncoder {
                 val acceptArgs: Seq[ITerm] = Seq(IConstant(C)) ++ globalSignals ++ Seq(i(idx))
                 val tguard = locationPredicateMap(t.source.label)(preStepArgs: _*) &
                              locationPredicateMap(t.target.label)(postStepArgs: _*)
-                (acceptPred(acceptArgs: _*) :- tguard  , NoSync)
+                (acceptPred(acceptArgs: _*) :- tguard)
             }
             loc_clauses ++ trans_clauses
         }
         
-        val clauses = firstStepTransitionClauses ++ transitionClauses ++ acceptClauses
         EncodedTransducer(
             prefix + transducer.name,
-            clauses,
+            firstStepTransitionClauses ++ transitionClauses,
             pb,
             locationPredicateMap,
             invariantClauses,
+            acceptClauses,
             globalSignalLabels,
             globalSignalTerms,
             clockTerms
         )
     }
+    
 
     def encodeClockReset(reset: Boolean) : IFunApp = {
         if (reset) False else True

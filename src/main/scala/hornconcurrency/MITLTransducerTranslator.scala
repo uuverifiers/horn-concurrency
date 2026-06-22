@@ -33,11 +33,11 @@ import hornconcurrency.MITLTransducerTranslator.mitlTranslation
 import hornconcurrency.TimedTransducerEncoder.EncodedTransducer
 import hornconcurrency.TimedTransducerEncoder.encodeTransducerEquation
 import hornconcurrency.TimedTransducer.TimedTransducerEquation
+import ap.parser.IFormula
 
 object MITLTransducerTranslator {
     def mitlTranslation(formula: MITL): TimedTransducer.TimedTransducerEquation = {
         var nextVar: Int = 0
-
         def fresh(): Int = {
             nextVar = nextVar + 1
             nextVar
@@ -62,8 +62,9 @@ object MITLTransducerTranslator {
                     )
             }
             inner match {
-                case AP(label)  =>
-                    transducerFromInput(label)
+                case AP(ap)  =>
+                    // val ap_label = fresh().toString
+                    transducerFromInput(ap)
                 case _      =>
                     val intermediateSignal = fresh()
                     val base = transducerFromInput(intermediateSignal.toString())
@@ -110,7 +111,10 @@ object MITLTransducerTranslator {
 
         def InputFor(formula: MITL) : (String, Option[TimedTransducer.TimedTransducerEquation]) = {
             formula match {
-                case AP(label) => (label, None)
+                case AP(ap) => {
+                    // val ap_label = fresh().toString
+                    (ap, None)
+                }
                 case _ =>
                     val intermediateSignal = fresh()
                     (intermediateSignal.toString(), Some(translate(formula, intermediateSignal)))

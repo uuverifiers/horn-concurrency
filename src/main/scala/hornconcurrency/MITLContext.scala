@@ -26,7 +26,7 @@ object MITLContext {
     //Converts from the parse tree to our own MITL ast
     // keeps a map apMap from variables to atomic propositions
     private val apMap: MMap[String, IFormula] = MMap.empty
-    private val rankMap: MMap[Int, IExpression] = MMap.empty
+    private var rankMap: Map[Int, ITerm] = Map.empty
     private var signal_var_id = 1
     private var mitlFormulas: Seq[MITL] = Seq.empty
 
@@ -47,8 +47,14 @@ object MITLContext {
         case mdecl: MitlFDecl => 
           mdecl.mitl_ match {case m: MitlSpec => m.mformula_}
       }
-      val parsedRanks: Seq[MitlDecl] = parsedStrs.collect{
-        case rdecl: RankDecl => rdecl
+      val parsedRanks: (Seq[(Int, MExpr)]) = parsedStrs.collect{
+        case rdecl: RankDecl =>  rdecl.ranking_ match {
+            case r: RankFunc => (r.integer_, r.mexpr_)
+        }
+      }
+      parsedRanks.foreach{ r => 
+        val rank_expr = translateExpr(r._2)
+        rankMap = rankMap + ((r._1, rank_expr))
       }
       mitlFormulas = parsedMitls.map(translateFormula)
       toMitlContext()
@@ -182,27 +188,26 @@ object MITLContext {
         }
       }
 
-      def translateAtom(atom: MAtom): IFormula = {
-        def translateExpr(expr: MExpr): ITerm = {
-          expr match {
-            case e: MEAdd => translateExpr(e.mexpr_1) + translateExpr(e.mexpr_2)
-            case e: MESub => translateExpr(e.mexpr_1) - translateExpr(e.mexpr_2)
-            // multiplication with variables not allowed in presburger arithmetic
-            case e: MEMul =>
-              Console.err.println("Multiplication not supported for now.")
-              i(Sort.Integer.newConstant("InvalidMul"))
-            case e: MEDiv =>
-              Console.err.println("Division not supported.")
-              i(Sort.Integer.newConstant("InvalidDiv"))
-            case e: MEVar =>
-              varTermsMap.getOrElse(e.id_, 
-                i(Sort.Integer.newConstant(e.id_)) // TODO: Maybe should throw error instead?
-              )
-            case e: MEInt => i(e.integer_)
-            case e: MEParen => translateExpr(e.mexpr_)
-          }
+      def translateExpr(expr: MExpr): ITerm = {
+        expr match {
+          case e: MEAdd => translateExpr(e.mexpr_1) + translateExpr(e.mexpr_2)
+          case e: MESub => translateExpr(e.mexpr_1) - translateExpr(e.mexpr_2)
+          // multiplication with variables not allowed in presburger arithmetic
+          case e: MEMul =>
+            Console.err.println("Multiplication not supported for now.")
+            i(Sort.Integer.newConstant("InvalidMul"))
+          case e: MEDiv =>
+            Console.err.println("Division not supported.")
+            i(Sort.Integer.newConstant("InvalidDiv"))
+          case e: MEVar =>
+            varTermsMap.getOrElse(e.id_, 
+              i(Sort.Integer.newConstant(e.id_)) // TODO: Maybe should throw error instead?
+            )
+          case e: MEInt => i(e.integer_)
+          case e: MEParen => translateExpr(e.mexpr_)
         }
-
+      }
+      def translateAtom(atom: MAtom): IFormula = {
         atom match {
           case a: AtomRel =>
             println(a)
