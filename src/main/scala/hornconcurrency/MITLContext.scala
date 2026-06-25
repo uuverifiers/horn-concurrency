@@ -17,7 +17,11 @@ case class MitlVar(name: String, sort: IExpression.Sort) {
   }
 }
 
-case class MITLContext(mitls: Seq[MITL], apMap: Map[String, IFormula], ranks: Map[Int, IExpression])
+case class MITLContext(
+  mitls: Seq[MITL], 
+  apMap: Map[String, Seq[ITerm] => IFormula], 
+  ranks: Map[Int, Seq[ITerm] => ITerm]
+)
 
 
 object MITLContext {
@@ -25,15 +29,17 @@ object MITLContext {
   class MitlConverter(val varTerms: Seq[ITerm]) {
     //Converts from the parse tree to our own MITL ast
     // keeps a map apMap from variables to atomic propositions
-    private val apMap: MMap[String, IFormula] = MMap.empty
-    private var rankMap: Map[Int, ITerm] = Map.empty
+    private var apMap: Map[String, Seq[ITerm] => IFormula] = Map()
+    private var rankMap: Map[Int, Seq[ITerm] => ITerm] = Map()
     private var signal_var_id = 1
-    private var mitlFormulas: Seq[MITL] = Seq.empty
+    private var mitlFormulas: Seq[MITL] = Seq()
+
 
     def toMitlContext() = MITLContext(mitlFormulas, apMap.toMap, rankMap.toMap)
 
-    private def varTermsMap: Map[String, ITerm] = 
-      varTerms.map(vt => (vt.toString, vt)).toMap
+    private def varToIndex: Map[String, Int] = 
+      varTerms.zipWithIndex.map{case (vt, idx) => (vt.toString, idx)}.toMap
+
 
     def get_fresh_signal_var(varName: String = "q") = {
       val tmp = signal_var_id
@@ -53,7 +59,7 @@ object MITLContext {
         }
       }
       parsedRanks.foreach{ r => 
-        val rank_expr = translateExpr(r._2)
+        val rank_expr = translateExpr(r._2)(_)
         rankMap = rankMap + ((r._1, rank_expr))
       }
       mitlFormulas = parsedMitls.map(translateFormula)
@@ -130,7 +136,7 @@ object MITLContext {
             MITL.PDiamond(interval, formula, rank)
           case f: UnOpBase => translateFormula(f.mformula_)
           case f: MFAtom => {
-            val ap = translateAtom(f.matom_)
+            val ap = translateAtom(f.matom_)(_)
             val signal_var = get_fresh_signal_var()
             apMap += ((signal_var, ap))
             MITL.AP(signal_var)
@@ -188,10 +194,11 @@ object MITLContext {
         }
       }
 
-      def translateExpr(expr: MExpr): ITerm = {
+      def translateExpr(expr: MExpr)(terms: Seq[ITerm]): ITerm = {
         expr match {
-          case e: MEAdd => translateExpr(e.mexpr_1) + translateExpr(e.mexpr_2)
-          case e: MESub => translateExpr(e.mexpr_1) - translateExpr(e.mexpr_2)
+          case e: MEAdd => 
+            translateExpr(e.mexpr_1)(terms) + translateExpr(e.mexpr_2)(terms)
+          case e: MESub => translateExpr(e.mexpr_1)(terms) - translateExpr(e.mexpr_2)(terms)
           // multiplication with variables not allowed in presburger arithmetic
           case e: MEMul =>
             Console.err.println("Multiplication not supported for now.")
@@ -200,19 +207,20 @@ object MITLContext {
             Console.err.println("Division not supported.")
             i(Sort.Integer.newConstant("InvalidDiv"))
           case e: MEVar =>
-            varTermsMap.getOrElse(e.id_, 
-              i(Sort.Integer.newConstant(e.id_)) // TODO: Maybe should throw error instead?
-            )
+            terms(varToIndex(e.id_))
+            // varTermsMap.getOrElse(e.id_, 
+            //   i(Sort.Integer.newConstant(e.id_)) // TODO: Maybe should throw error instead?
+            // )
           case e: MEInt => i(e.integer_)
-          case e: MEParen => translateExpr(e.mexpr_)
+          case e: MEParen => translateExpr(e.mexpr_)(terms)
         }
       }
-      def translateAtom(atom: MAtom): IFormula = {
+      def translateAtom(atom: MAtom)(terms: Seq[ITerm]): IFormula = {
         atom match {
           case a: AtomRel =>
             println(a)
-            val left = translateExpr(a.mexpr_1)
-            val right = translateExpr(a.mexpr_2)
+            val left = translateExpr(a.mexpr_1)(terms)
+            val right = translateExpr(a.mexpr_2)(terms)
 
 
             a.mrelop_ match {
@@ -230,7 +238,7 @@ object MITLContext {
   //   //parses either a mitl or a ranking function
   //     apply(Seq(str), varTerms)
   // }
-
+  
   def apply(strs : Seq[String], varTerms: Seq[ITerm] = Seq.empty) : MITLContext = {
     val mconv = new MitlConverter(varTerms)
     mconv.parseMany(strs)
