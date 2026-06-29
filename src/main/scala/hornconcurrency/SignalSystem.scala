@@ -223,7 +223,6 @@ class SignalEncoder(system : SignalSystem) {
     progressInvariantClauses.map(
       blocks => blocks.map(_.keySet).foldLeft(Set[Predicate]())(_ ++ _)
     )
-
   // For each local predicate inside a progress block,
   // we need a copy to represent environment transitions
   val toPredCopy =
@@ -437,7 +436,8 @@ object AcceptingSignalSystem {
             _timeSpec             : RationalTime,
             _signals              : Set[Int],
             _progressBlocks       : Seq[Seq[ProgressBlock]],
-            _accepts              : Map[Seq[IExpression.Predicate], Int] = Map(), //TODO: dont need acceptPred
+            _accepts              : Map[Seq[IExpression.Predicate], Option[Int]] = Map(), //TODO: dont need acceptPred
+            _outputSignal         : Option[Int] = None,
             _globalVarAssumptions : Option[Seq[ITerm] => IFormula] = None,
             _hints                : VerificationHints = EmptyVerificationHints,
             _backgroundAxioms     : BackgroundAxioms = NoBackgroundAxioms)
@@ -453,6 +453,7 @@ object AcceptingSignalSystem {
       val signals = _signals
       val progressBlocks = _progressBlocks
       val accepts = _accepts
+      val outputSignal = _outputSignal
     } with AcceptingSignalSystem
 }
 trait AcceptingSignalSystem extends SignalSystem {
@@ -460,46 +461,66 @@ trait AcceptingSignalSystem extends SignalSystem {
   import HornClauses.Clause
   import SignalSystem.ProgressBlock
 
-  def accepts: Map[Seq[IExpression.Predicate], Int]
+  //Accepts, predicates that are accepting. Either one predicate for location accepts,
+  // or two predicates for transition accepts. Maybe maps to a ranking function index.
+  def accepts: Map[Seq[IExpression.Predicate], Option[Int]]
+  def outputSignal: Option[Int]
 
   case class AcceptingSignalSystemExtender(
-        sorts: Seq[IExpression.Sort], 
+        extSorts: Seq[IExpression.Sort], 
         bodyTerms: Seq[ITerm],
         headTerms: Seq[ITerm],
         startIdx: Int = 0 //Where to insert terms
       ) {
+          val extendedPredMap =
+          (for (preds <- localPreds.iterator;
+                p <- preds.iterator) yield {
+            val predSorts = predArgumentSorts(p)
+            val (sortPref, sortSuff) = predSorts.splitAt(startIdx)
+            val newSorts = sortPref ++ extSorts ++ sortSuff
+            val newP = MonoSortedPredicate(p.name, newSorts)
+            p -> newP
+          }).toMap
+        val bodyTermIdxMap = bodyTerms.zipWithIndex.map{case (t, i) => (t,i+startIdx)}.toMap
+        val headTermIdxMap = headTerms.zipWithIndex.map{case (t, i) => (t,i+startIdx)}.toMap 
         //Class for extending clauses in a Signal system with new global variables.
-        def extendedProcessSet : ProcessSet = {
+        val extendedProcessSet : ProcessSet = {
           processes.map{p =>
             val new_clauses = p._1.map{case (c, synch) =>(extendClause(c), synch)}
             (new_clauses, p._2)
           }
         }
         def extendedAssertions: Seq[Clause] = {
-          assertions.map{extendClause}
+          assertions.map{ case Clause(head, body, constraint) => 
+            Clause(extendBodyAtom(head), body.map(extendBodyAtom), constraint)
+            //Intentional to use body terms also in head
+          }
         }
         def extendedProgressBlocks : Seq[Seq[ProgressBlock]] = {
           progressBlocks.map(_.map(pb => ProgressBlock(pb.invariants.map(extendClause))))
         } 
+        def extendedAccepts : Map[Seq[IExpression.Predicate], Option[Int]] = 
+          accepts.map{ case (preds, idx) => 
+            (preds.map(extendedPredMap), idx)
+          }
         def extendClause(c: Clause) : Clause = 
           c match {
             case Clause(head, body, constraint) => {
               val newHead = extendHeadAtom(head)
               val newBody = body.map(extendBodyAtom)
-              Clause(newHead, newBody, constraint)
+              Clause(extendHeadAtom(head), newBody, constraint)
             }
           }
         def extendAtom(terms: Seq[ITerm])(atom: IAtom) : IAtom = {
-          val old_sorts = predArgumentSorts(atom.pred)
-          val old_args = atom.args
-          val (sorts_pref, sorts_suff) = old_sorts.splitAt(startIdx)
-          val (args_pref, args_suff) = old_args.splitAt(startIdx)
+          atom match {
+            case IAtom(HornClauses.FALSE, Seq()) => atom
+            case IAtom(pred, args) =>
+            
+            val old_args = atom.args
+            val (args_pref, args_suff) = old_args.splitAt(startIdx)
 
-          IAtom(MonoSortedPredicate(
-            atom.pred.name, 
-            sorts_pref ++ sorts ++ sorts_suff), 
-            args_pref ++ terms ++ args_suff 
-          )
+            IAtom(extendedPredMap(pred), args_pref ++ terms ++ args_suff)
+          }
         }
         def extendedSignals = signals.map(startIdx +)
         def extendHeadAtom = extendAtom(headTerms)(_)
@@ -517,49 +538,57 @@ trait AcceptingSignalSystem extends SignalSystem {
     //FIXME: may break if no progress blocks
     //or progress block without invariants
 
-    //Currently, dont support accepts in both
-    assert(that.accepts.isEmpty)
+    //FIXME: Currently, dont support accepts in both, so we assume accepts are in that
+    assert(this.accepts.isEmpty)
 
-    val this_atom = this.progressBlocks.head.head.invariants.head.head
-    val that_atom = that.progressBlocks.head.head.invariants.head.head
-    
+    //FIXME: Feels hacky
+    val this_atom = this.progressBlocks.head.head.invariants.head.body.head
+    val that_atom = that.progressBlocks.head.head.invariants.head.body.head
+
     val this_extender = AcceptingSignalSystemExtender(
-      predArgumentSorts(that_atom.pred), 
-      that_atom.args,
-      that_atom.args.size
+      (predArgumentSorts(that_atom.pred) take that.globalVarNum).tail, 
+      (that_atom.args take that.globalVarNum).tail,  //not first clock term
+      this.globalVarNum
     )
     val that_extender = that.AcceptingSignalSystemExtender(
-      predArgumentSorts(this_atom.pred), 
-      this_atom.args,
-      0
+      (predArgumentSorts(this_atom.pred) take this.globalVarNum).tail, 
+      (this_atom.args take this.globalVarNum).tail, //not first clock term
+      1
     )
+
+    assert(globalVarAssumptions.isEmpty && that.globalVarAssumptions.isEmpty)
     val new_globalVarAssumptions: Option[Seq[ITerm] => IFormula] = 
       (this.globalVarAssumptions, that.globalVarAssumptions) match {
         case (None, None) => None
         case (Some(this_a), None) => Some(ts => this_a(ts take this.globalVarNum))
+        //FIXME: Clock is in first for both
         case (None, Some(that_a)) => Some(ts => that_a(ts takeRight that.globalVarNum))
         case (Some(this_a), Some(that_a)) => Some(
           ts => (this_a(ts take this.globalVarNum) &&& that_a(ts takeRight that.globalVarNum))
         )
       }
-    val new_backgroundAxioms = SomeBackgroundAxioms(
-      this.backgroundAxioms.predicates ++ that.backgroundAxioms.predicates,
-      this.backgroundAxioms.clauses.map(this_extender.extendClause) ++ 
-        that.backgroundAxioms.clauses.map(that_extender.extendClause)
-    )
+
+    // FIXME: Should we extend clauses in background axioms?
+    val new_backgroundAxioms = (this.backgroundAxioms, that.backgroundAxioms) match {
+      case (SomeBackgroundAxioms(ps1, cs1), SomeBackgroundAxioms(ps2, cs2)) => 
+          SomeBackgroundAxioms(ps1 ++ ps2, cs1 ++ cs2)
+      case (NoBackgroundAxioms, ax@SomeBackgroundAxioms(_, _)) => ax
+      case (ax@SomeBackgroundAxioms(_, _), NoBackgroundAxioms) => ax
+      case (NoBackgroundAxioms, NoBackgroundAxioms) => NoBackgroundAxioms
+    }
+
     AcceptingSignalSystem(
       this_extender.extendedProcessSet ++ that_extender.extendedProcessSet,
-      this.globalVarNum + that.globalVarNum,
+      this.globalVarNum + that.globalVarNum - 1, //Clock is common in first
       this_extender.extendedAssertions ++ that_extender.extendedAssertions,
       this.timeSpec,
       this.signals ++ that_extender.extendedSignals,
       this_extender.extendedProgressBlocks ++ that_extender.extendedProgressBlocks,
-      this.accepts,
+      that_extender.extendedAccepts, 
+      that.outputSignal,
       new_globalVarAssumptions,
       this.hints ++ that.hints,
       new_backgroundAxioms
-        //FIXME
-        //FIXME
     )
       
   } 
@@ -568,13 +597,21 @@ trait AcceptingSignalSystem extends SignalSystem {
   
   def addAtomicPropositions(apMap: Map[Int, Seq[ITerm] => IFormula]): AcceptingSignalSystem = {
     //Assumes atomic propositions are over the first terms (i.e., the global vars)
-    def apConstraint(args: Seq[ITerm]): IFormula = 
-      IExpression.and(apMap.map{case (n, f) => 
-        isTrue(args(n)) <===> f(args)
-      })
+    def apConstraint(atom: IAtom): IFormula = {
+      println("atom: " + atom.toString())
+      atom match {
+        case IAtom(HornClauses.FALSE, Seq()) => true
+        case IAtom(pred, args) => 
+          IExpression.and(apMap.map{case (n, f) => 
+            isTrue(args(n)) <===> f(args)
+          })    
+      }
+    }
     def newClause(c: Clause) = c match { 
       case Clause(head, body, constraint) =>
-        val newConstraint = constraint & apConstraint(head.args) & apConstraint(body.head.args) 
+        val newConstraint = constraint & apConstraint(head) & 
+          (body.headOption match {case None => true case Some(atom) => apConstraint(atom)})
+        //FIXME: Not take the head of the body, use more systematic fashion
         Clause(head, body, newConstraint)
     }
     val new_progressBlocks = progressBlocks.map(_.map( pb =>
@@ -583,6 +620,8 @@ trait AcceptingSignalSystem extends SignalSystem {
     val new_processSet = processes.map{case (proc, repl) => 
       (proc.map{case (c, synch) => (newClause(c), synch)}, repl)
     }
+
+
     AcceptingSignalSystem(
       new_processSet,
       globalVarNum,
@@ -591,6 +630,7 @@ trait AcceptingSignalSystem extends SignalSystem {
       signals,
       new_progressBlocks,
       accepts,
+      outputSignal,
       globalVarAssumptions,
       hints,
       backgroundAxioms
@@ -600,62 +640,62 @@ trait AcceptingSignalSystem extends SignalSystem {
 
   // Transform accept clauses to the ranking functions such that the system has no failing asserts
   // if the original system is empty (has no infinite runs with each accepting set being visited infinitely often)
-  def transFormAcceptsToEmptiness(rankFuncs: Map[Int, Seq[ITerm] => ITerm]): SignalSystem = {
+  def transformAcceptsToEmptiness(rankFuncs: Map[Int, Seq[ITerm] => ITerm]): SignalSystem = {
     //NOTE: we assume that the variables for the rank functions occur first in the predicates of the signal system
     
     val new_globalVarNum = globalVarNum + rankFuncs.size * 2
     val rankValues_sorts =
         List.fill(rankFuncs.size)(IExpression.Sort.Integer)
-    val rankValues_bodyTerms = rankFuncs.map{case (k, _) => 
+    val rankIDs = rankFuncs.keySet.toSeq
+    val rankIDToTermIdx = rankIDs.zipWithIndex.toMap
+    val termIdxToRankID = rankIDToTermIdx.map{case (k,v) => (v,k)}.toMap
+    val rankValues_bodyTerms = rankIDs.map{k => 
       IExpression.i(IExpression.Sort.Integer.newConstant(s"rank$k"))
     }.toSeq
-    val rankValues_headTerms = rankFuncs.map{case (k, _) => 
+    val rankValues_headTerms = rankIDs.map{k => 
       IExpression.i(IExpression.Sort.Integer.newConstant(s"newRank$k"))
     }.toSeq
     val rankValid_sorts = List.fill(rankFuncs.size)(IExpression.Sort.Bool)
-    val rankValid_headTerms = rankFuncs.map{case (k, _) => 
-      IExpression.i(IExpression.Sort.Bool.newConstant(s"newRank$k"))
+    val rankValid_headTerms = rankIDs.map{k => 
+      IExpression.i(IExpression.Sort.Bool.newConstant(s"newRankValid$k"))
     }.toSeq
-    val rankValid_bodyTerms = rankFuncs.map{case (k, _) => 
-      IExpression.i(IExpression.Sort.Bool.newConstant(s"newRank$k"))
+    val rankValid_bodyTerms = rankIDs.map{k => 
+      IExpression.i(IExpression.Sort.Bool.newConstant(s"rankValid$k"))
     }.toSeq
-    val rank_sorts = rankValues_sorts ++ rankValid_sorts
-    val rank_headTerms = rankValues_headTerms ++ rankValid_headTerms
-    val rank_bodyTerms = rankValues_bodyTerms ++ rankValid_bodyTerms
 
-    val originalTerms = progressBlocks.head.head.invariants.head.head.args
-      
+    val acceptCounter_sort = IExpression.Sort.Integer //FIXME: Count per accept label
+    val acceptCounter_headTerm = IExpression.i(acceptCounter_sort.newConstant(s"newAccCntr"))
+    val acceptCounter_bodyTerm = IExpression.i(acceptCounter_sort.newConstant(s"accCntr"))
 
+    val rank_sorts = acceptCounter_sort +: (rankValues_sorts ++ rankValid_sorts) 
+    val rank_headTerms = acceptCounter_headTerm +: (rankValues_headTerms ++ rankValid_headTerms)
+    val rank_bodyTerms = acceptCounter_bodyTerm +: (rankValues_bodyTerms ++ rankValid_bodyTerms)
+    
+    val extender = AcceptingSignalSystemExtender(rank_sorts, rank_bodyTerms, rank_headTerms, 1)
     //Extends clause with terms that keep, for each accept index, if the corresponding
     // ranking function is still valid, and the value of the ranking function.
-    def extendClauseWithRank(clause: Clause) = clause match {
-      case Clause(head, body, constraint) => {
-        val newHead = //extender.extendHeadAtom(head)
-          IAtom(MonoSortedPredicate(head.pred.name, rank_sorts), rank_headTerms)
-        val newBody = body.map( b => 
-          IAtom(MonoSortedPredicate(b.pred.name, rank_sorts), rank_bodyTerms)
-        )
+    def extendClauseWithRank(acceptingTermIdxs: Clause => Seq[Int])(clause: Clause) = clause match {
+      case c@Clause(head, body, constraint) => {
+        val newHead = extender.extendHeadAtom(head)
+        val newBody = body.map(extender.extendBodyAtom)
         val zipped = rankValues_bodyTerms.zip(rankValues_headTerms).
                       zip(rankValid_bodyTerms).zip(rankValid_headTerms)
-        def isAccepting(idx: Int) = accepts.get(Seq(head.pred)) match {
-          case None => accepts.get(Seq(head.pred, body.head.pred)) match {
-            case None => false
-            case Some(_idx) => _idx == idx
-          }
-          case Some(_idx) => _idx == idx
-        }
+          
         val newConstraint = IExpression.and(zipped.zipWithIndex.map{
           case ((((valb, valh), validb), validh), idx) =>
             //If accepting, the new ranking value should equal the ranking value as evaluated
             // over the args of the head pred. IF the new rank is less than zero or geq than the
             // old rank, then the corresponding rank function is set to invalid
-            if (isAccepting(idx)) {
-              (isFalse(validb) ===> isFalse(validh)) &
+            if (acceptingTermIdxs(c).contains(idx)) {
+              ((isFalse(validb) ===> isFalse(validh)) &
               (isTrue(validb) & valh < valb & valh >= 0 <===> (isTrue(validh))) &
-              valh === rankFuncs(idx)(head.args)
+              valh === (rankFuncs(termIdxToRankID(idx))(head.args) - acceptCounter_headTerm) &
+              acceptCounter_headTerm === (acceptCounter_bodyTerm + 1)) &
               constraint
             } else {
-              (validh === validb & valh === valb) & constraint
+              (validh === validb & valh === valb & 
+              acceptCounter_headTerm === acceptCounter_bodyTerm
+              ) & constraint
             }
         })
         Clause(newHead, newBody, newConstraint)
@@ -663,40 +703,71 @@ trait AcceptingSignalSystem extends SignalSystem {
     }
     
     val new_processSet = processes.map{p =>
-        val new_clauses = p._1.map{case (c, synch) => (extendClauseWithRank(c), synch)}
+       //FIXME: Accepts on transitions      
+       val acceptingTermIdxs: Clause => Seq[Int] = {_ => Seq()}
+        val new_clauses = p._1.map{case (c, synch) => 
+          (extendClauseWithRank(acceptingTermIdxs)(c), synch)}
         (new_clauses, p._2)
       }
-    val new_progressBlocks = 
-      progressBlocks.map(_.map(pb => ProgressBlock(pb.invariants.map(extendClauseWithRank))))
+    val new_progressBlocks = { 
+        val acceptingTermIdxs : Clause => Seq[Int] = 
+          {case c@Clause(head, body, _) => accepts.flatMap{
+          case (preds, idx) => preds match {
+            case Seq(p) if p == head.pred => idx
+            case _ => None 
+          }
+        }.map(rankIDToTermIdx).toSeq}
+      progressBlocks.map(_.map(pb =>
+         ProgressBlock(pb.invariants.map(extendClauseWithRank(acceptingTermIdxs)))
+      ))
+    }
     
 
-    val extender = AcceptingSignalSystemExtender(rank_sorts, rank_bodyTerms, 0)
     
     // For each accept location/transition, we assert that there is at least one 
     // valid ranking function 
-    val acceptAssertions = accepts.map{ case a => 
-      val zipped = rankValues_bodyTerms.zip(rankValues_headTerms).
-              zip(rankValid_bodyTerms).zip(rankValid_headTerms)
-      val (preds, idx) = (a._1.map{ p =>
+    val locAcceptAssertions = accepts.map{ case (preds, id) => 
+      val newAtoms = preds.zipWithIndex.map{ case (p, i) => {
+          val terms = predArgumentSorts(p).zipWithIndex.map{case (a,j) => 
+            IExpression.i(a.newConstant(s"acc${i}_$j"))
+          }
         //  assert(p1.arity == p2.arity && predArgumentSorts(p1) == predArgumentSorts(p2))
-          extender.extendAtom(rank_bodyTerms)(IAtom(p, originalTerms take p.arity))
-        }, a._2)
-      val constraint = IExpression.or(rankValid_headTerms.map(isTrue)) 
-            //Assert right-hand by setting lhs to FALSE 
-      Clause(IAtom(HornClauses.FALSE, Seq()), preds.toList, constraint)
+          extender.extendAtom(rank_bodyTerms)(IAtom(p, terms))
+      }}
+      val constraint = IExpression.and(rankValid_headTerms.map(isFalse)) //negate assertions 
+      //Assert right-hand by setting lhs to FALSE 
+      Clause(IAtom(HornClauses.FALSE, Seq()), newAtoms.toList, constraint)
     }
 
     // assume assertions just carry along the rank terms
     val newAssertions = extender.extendedAssertions
+    
+    assert(backgroundAxioms match {
+      case NoBackgroundAxioms => true
+      case _ => false
+    })
+
+
+    //Initially set all rank functions to valid, and all values to initial rank
+    // and the accept counter to 0, and the main output signal initially to false
+    assert(outputSignal.isDefined)
+    assert(globalVarAssumptions.isEmpty) //FIXME: Treat properly
+    val new_globalVarAssumptions = Some({ ts: Seq[ITerm] => 
+      IExpression.and(rankValid_bodyTerms.map(bt => isTrue(ts(extender.bodyTermIdxMap.get(bt).get)))) &
+      IExpression.and(rankValues_bodyTerms.zipWithIndex.map{ case (rv, k) => 
+        rv === rankFuncs(termIdxToRankID(k))(ts)
+      }) & acceptCounter_bodyTerm === 0 & isFalse(ts(outputSignal.get + rankFuncs.size)) & ts(0) === 0
+    })
+
 
     SignalSystem(
       new_processSet,
       new_globalVarNum,
-      newAssertions ++ acceptAssertions,
+      newAssertions ++ locAcceptAssertions,
       timeSpec,
       signals,
       new_progressBlocks,
-      globalVarAssumptions,
+      new_globalVarAssumptions,
       hints,
       backgroundAxioms
     )

@@ -26,7 +26,8 @@ case class MITLContext(
 
 object MITLContext {
 
-  class MitlConverter(val varTerms: Seq[ITerm]) {
+  class MitlConverter(val varTerms: Seq[String]) {
+    println(varTerms)
     //Converts from the parse tree to our own MITL ast
     // keeps a map apMap from variables to atomic propositions
     private var apMap: Map[String, Seq[ITerm] => IFormula] = Map()
@@ -38,7 +39,7 @@ object MITLContext {
     def toMitlContext() = MITLContext(mitlFormulas, apMap.toMap, rankMap.toMap)
 
     private def varToIndex: Map[String, Int] = 
-      varTerms.zipWithIndex.map{case (vt, idx) => (vt.toString, idx)}.toMap
+      varTerms.zipWithIndex.toMap
 
 
     def get_fresh_signal_var(varName: String = "q") = {
@@ -53,13 +54,14 @@ object MITLContext {
         case mdecl: MitlFDecl => 
           mdecl.mitl_ match {case m: MitlSpec => m.mformula_}
       }
+      
       val parsedRanks: (Seq[(Int, MExpr)]) = parsedStrs.collect{
         case rdecl: RankDecl =>  rdecl.ranking_ match {
             case r: RankFunc => (r.integer_, r.mexpr_)
         }
       }
       parsedRanks.foreach{ r => 
-        val rank_expr = translateExpr(r._2)(_)
+        val rank_expr = translateExpr(r._2)
         rankMap = rankMap + ((r._1, rank_expr))
       }
       mitlFormulas = parsedMitls.map(translateFormula)
@@ -136,7 +138,7 @@ object MITLContext {
             MITL.PDiamond(interval, formula, rank)
           case f: UnOpBase => translateFormula(f.mformula_)
           case f: MFAtom => {
-            val ap = translateAtom(f.matom_)(_)
+            val ap = translateAtom(f.matom_)
             val signal_var = get_fresh_signal_var()
             apMap += ((signal_var, ap))
             MITL.AP(signal_var)
@@ -194,43 +196,55 @@ object MITLContext {
         }
       }
 
-      def translateExpr(expr: MExpr)(terms: Seq[ITerm]): ITerm = {
+      def translateExpr(expr: MExpr): (Seq[ITerm] => ITerm) = {
         expr match {
-          case e: MEAdd => 
-            translateExpr(e.mexpr_1)(terms) + translateExpr(e.mexpr_2)(terms)
-          case e: MESub => translateExpr(e.mexpr_1)(terms) - translateExpr(e.mexpr_2)(terms)
+          case e: MEAdd => {
+            val t1 = translateExpr(e.mexpr_1)
+            val t2 = translateExpr(e.mexpr_2)
+            (ts => t1(ts) + t2(ts))
+          }
+          case e: MESub => {
+            val t1 = translateExpr(e.mexpr_1)
+            val t2 = translateExpr(e.mexpr_2)
+            (ts => t1(ts) - t2(ts))
+          }
           // multiplication with variables not allowed in presburger arithmetic
-          case e: MEMul =>
+          case e: MEMul => {
             Console.err.println("Multiplication not supported for now.")
-            i(Sort.Integer.newConstant("InvalidMul"))
-          case e: MEDiv =>
+            val t = i(Sort.Integer.newConstant("InvalidMul"))
+            (ts => t)
+          }
+          case e: MEDiv => {
             Console.err.println("Division not supported.")
-            i(Sort.Integer.newConstant("InvalidDiv"))
-          case e: MEVar =>
-            terms(varToIndex(e.id_))
-            // varTermsMap.getOrElse(e.id_, 
-            //   i(Sort.Integer.newConstant(e.id_)) // TODO: Maybe should throw error instead?
-            // )
-          case e: MEInt => i(e.integer_)
-          case e: MEParen => translateExpr(e.mexpr_)(terms)
+            val t = i(Sort.Integer.newConstant("InvalidDiv"))
+            (_ => t)
+          }
+          case e: MEVar => {
+            val idx = varToIndex(e.id_)
+            (ts => ts(idx))
+          }
+          case e: MEInt => {
+            val t = i(e.integer_)
+            (_ => t)
+          }
+          case e: MEParen => translateExpr(e.mexpr_)
         }
       }
-      def translateAtom(atom: MAtom)(terms: Seq[ITerm]): IFormula = {
+      def translateAtom(atom: MAtom): (Seq[ITerm] => IFormula) = {
         atom match {
           case a: AtomRel =>
-            println(a)
-            val left = translateExpr(a.mexpr_1)(terms)
-            val right = translateExpr(a.mexpr_2)(terms)
-
-
-            a.mrelop_ match {
-              case _: MRelLt => left < right
-              case _: MRelLe => left <= right
-              case _: MRelGt => left > right
-              case _: MRelGe => left >= right
-              case _: MRelEq => left === right
-              case _: MRelNeq => left =/= right
-            }
+            val left = translateExpr(a.mexpr_1)
+            val right = translateExpr(a.mexpr_2)
+            (ts => 
+              a.mrelop_ match {
+                case _: MRelLt => left(ts) < right(ts)
+                case _: MRelLe => left(ts) <= right(ts)
+                case _: MRelGt => left(ts) > right(ts)
+                case _: MRelGe => left(ts) >= right(ts)
+                case _: MRelEq => left(ts) === right(ts)
+                case _: MRelNeq => left(ts) =/= right(ts)
+              }
+            )
         }
       }
   }
@@ -239,7 +253,7 @@ object MITLContext {
   //     apply(Seq(str), varTerms)
   // }
   
-  def apply(strs : Seq[String], varTerms: Seq[ITerm] = Seq.empty) : MITLContext = {
+  def apply(strs : Seq[String], varTerms: Seq[String] = Seq.empty) : MITLContext = {
     val mconv = new MitlConverter(varTerms)
     mconv.parseMany(strs)
     // strs.map{s => 
