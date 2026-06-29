@@ -1,10 +1,9 @@
 package hornconcurrency
 
-import org.scalatest._
+import org.scalatest.FlatSpec
 import ap.types.MonoSortedPredicate
 
 class MITLTranslatorTests extends FlatSpec {
-    import ap.parser._
     import ap.parser.IExpression._
     import ap.theories.ADT.BoolADT.{True, False}
     import ap.theories.rationals.Rationals
@@ -16,11 +15,11 @@ class MITLTranslatorTests extends FlatSpec {
     import SignalSystem._
     import System._
     import VerificationUtils._
-    import Rationals.{geq, minus, int2ring => toRat}
+    import Rationals.{geq, gt, lt, minus, int2ring => toRat}
 
-    "MITL Once" should "prohibit runs where output is false for five time units after p" in {
-        val formula = PDiamond(OpenOpen(0, 5), AP("p"), None)
-        val encoded = encodeTransducerEquation(mitlTranslation(formula))
+    "MITL Future" should "prohibit runs where output is false for five time units after p" in {
+        val formula = Diamond(OpenOpen(0, 5), AP("p"), None)
+        val encoded = encodeTransducerEquation(mitlTranslation(formula), Map.empty)
 
         val signalByLabel = encoded.head.globalSignalLabels.zip(encoded.head.globalSignalTerms).toMap
         val pSignal = signalByLabel("p")
@@ -32,24 +31,26 @@ class MITLTranslatorTests extends FlatSpec {
             List(Rationals.dom)
         val monArgs = Seq(C) ++ encoded.head.globalSignalTerms ++ Seq(cMon)
         val resetMonArgs = Seq(C) ++ encoded.head.globalSignalTerms ++ Seq(C)
-        val mon = for (i <- 0 to 2) yield MonoSortedPredicate("monitor" + i, monSorts)
+        val mon = for (i <- 0 to 1) yield MonoSortedPredicate("monitor" + i, monSorts)
 
         val monProc = List(
-            // Wait until p becomes true, then reset the monitor clock.
-            (mon(0)(monArgs: _*) :- true,
+            // Assume MITL formula is true
+            (mon(0)(resetMonArgs: _*) :- (qSignal === True),
                 NoSync),
+            // Reach mon(1) after 5 units
             (mon(1)(resetMonArgs: _*) :-
-                (mon(0)(monArgs: _*), pSignal === True),
-                NoSync),
-
-            (mon(2)(resetMonArgs: _*) :-
-                (mon(1)(monArgs: _*), geq(minus(C, cMon), toRat(5))),
+                (mon(0)(monArgs: _*),
+                    geq(minus(C, cMon), toRat(5))),
                 NoSync)
         )
 
-        val monProgressBlocks = List()
+        val monProgressBlocks = List(
+            // Allow time to progress as long as p is false
+            ProgressBlock(List((pSignal === False) :- mon(0)(monArgs: _*))),
+            ProgressBlock(List(Clause(HornClauses.FALSE(), List(mon(1)(monArgs: _*)), false)))
+        )
 
-        val assertion = false :- mon(2)(monArgs: _*)
+        val assertion = false :- (mon(1)(monArgs: _*), (gt(minus(C, cMon), toRat(0))))
 
         val globalVarNum = 1 + encoded.head.globalSignalTerms.size
         val system = SignalSystem(
@@ -66,12 +67,9 @@ class MITLTranslatorTests extends FlatSpec {
         assert(isSolvable(vl))
     }
 
-    "MITL conjunction" should "prohibit runs where output is true in contradiction" in {
-        val formula = Conjunction(AP("p"), Negation(AP("p")))
-        // Faster test
-        // val formula = Negation(Disjunction(Negation(AP("p")), AP("p")))
-        val normalizedFormula = nf(formula)
-        val encoded = encodeTransducerEquation(mitlTranslation(normalizedFormula))
+    "MITL Future" should "witness satisfaction when output is true and p occurs in the open interval" in {
+        val formula = Diamond(OpenOpen(0, 5), AP("p"), None)
+        val encoded = encodeTransducerEquation(mitlTranslation(formula), Map.empty)
 
         val signalByLabel = encoded.head.globalSignalLabels.zip(encoded.head.globalSignalTerms).toMap
         val pSignal = signalByLabel("p")
@@ -83,17 +81,23 @@ class MITLTranslatorTests extends FlatSpec {
             List(Rationals.dom)
         val monArgs = Seq(C) ++ encoded.head.globalSignalTerms ++ Seq(cMon)
         val resetMonArgs = Seq(C) ++ encoded.head.globalSignalTerms ++ Seq(C)
-        val mon = for (i <- 0 to 1) yield MonoSortedPredicate("monitor" + i, monSorts)
+        val mon = for (i <- 0 to 1) yield MonoSortedPredicate("satMonitor" + i, monSorts)
 
+        val elapsed = minus(C, cMon)
         val monProc = List(
-            (mon(0)(monArgs: _*) :- true,
+            (mon(0)(resetMonArgs: _*) :- (qSignal === True),
                 NoSync),
-            (mon(1)(resetMonArgs: _*) :-
-                (mon(0)(monArgs: _*), pSignal === True, qSignal === True),
-                NoSync),
+            (mon(1)(monArgs: _*) :-
+                (mon(0)(monArgs: _*),
+                    pSignal === True,
+                    gt(elapsed, toRat(0)),
+                    lt(elapsed, toRat(5))),
+                NoSync)
         )
 
-        val monProgressBlocks = List()
+        val monProgressBlocks = List(
+            ProgressBlock(List(Clause(HornClauses.FALSE(), List(mon(0)(monArgs: _*)), false)))
+        )
 
         val assertion = false :- mon(1)(monArgs: _*)
 
@@ -109,6 +113,6 @@ class MITLTranslatorTests extends FlatSpec {
 
         val encoder = new SignalEncoder(system)
         val vl = runLoop(encoder.result)
-        assert(isSolvable(vl))
+        assert(!isSolvable(vl))
     }
 }
