@@ -286,6 +286,7 @@ object MITL {
             case Box(interval, inner, rank) => nf(Negation(Diamond(interval, Negation(inner), rank)))
             // case Box(interval, inner) => Negation(U(interval, True, Negation(nf(inner))))
             case PBox(interval, inner, rank) => nf(Negation(PDiamond(interval, Negation(inner), rank)))
+            case Diamond(OpenOpen(a, b), inner, rank) => nf(U(OpenOpen(a, b), True, inner, rank))
         }
     }
 }
