@@ -27,7 +27,6 @@ case class MITLContext(
 object MITLContext {
 
   class MitlConverter(val varTerms: Seq[String]) {
-    println(varTerms)
     //Converts from the parse tree to our own MITL ast
     // keeps a map apMap from variables to atomic propositions
     private var apMap: Map[String, Seq[ITerm] => IFormula] = Map()

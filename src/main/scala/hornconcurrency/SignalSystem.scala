@@ -590,7 +590,6 @@ trait AcceptingSignalSystem extends SignalSystem {
       this.hints ++ that.hints,
       new_backgroundAxioms
     )
-      
   } 
   def isTrue(t: ITerm) : IFormula = t === ap.theories.ADT.BoolADT.True 
   def isFalse(t: ITerm): IFormula = t === ap.theories.ADT.BoolADT.False
@@ -598,7 +597,6 @@ trait AcceptingSignalSystem extends SignalSystem {
   def addAtomicPropositions(apMap: Map[Int, Seq[ITerm] => IFormula]): AcceptingSignalSystem = {
     //Assumes atomic propositions are over the first terms (i.e., the global vars)
     def apConstraint(atom: IAtom): IFormula = {
-      println("atom: " + atom.toString())
       atom match {
         case IAtom(HornClauses.FALSE, Seq()) => true
         case IAtom(pred, args) => 
@@ -758,7 +756,6 @@ trait AcceptingSignalSystem extends SignalSystem {
         rv === rankFuncs(termIdxToRankID(k))(ts)
       }) & acceptCounter_bodyTerm === 0 & isFalse(ts(outputSignal.get + rankFuncs.size)) & ts(0) === 0
     })
-
 
     SignalSystem(
       new_processSet,
