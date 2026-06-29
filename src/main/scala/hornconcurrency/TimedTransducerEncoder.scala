@@ -172,7 +172,8 @@ object TimedTransducerEncoder {
                 Rationals.dom // global clock
             ) ++
             globalSignalTerms.map(_ => Sort.Bool) ++ // global input/output signals
-            transducer.clocks.map(_ => Rationals.dom) // local clocks
+            (transducer.clocks.map(_ => Rationals.dom) :+
+                Rationals.dom) // local clocks plus internal discrete-step clock
         val locationPredicateMap = transducer.locations
             .filter(_ != transducer.initialLocation)
             .map(
@@ -183,14 +184,25 @@ object TimedTransducerEncoder {
         // local clocks
         val clockTerms = transducer.clocks.map(clock =>
             Rationals.dom.newConstant(prefix + clock.label))
+        val stepClockTerm = Rationals.dom.newConstant(prefix + "step")
         val clockEnvironment = transducer.clocks.zip(clockTerms).toMap
         val initialClockEnvironment = transducer.clocks.map(_ -> C).toMap
         val clockArgs = clockTerms.map(IConstant(_))
+        val stepClockArg = IConstant(stepClockTerm)
+
+        def configurationArgs(localClockArgs: Seq[ITerm],
+                              stepClock: ITerm): Seq[ITerm] =
+            Seq(IConstant(C)) ++ globalSignals ++ localClockArgs ++ Seq(stepClock)
+
+        val currentConfigurationArgs =
+            configurationArgs(clockArgs, stepClockArg)
+        val alternatingStepGuard =
+            gt(minus(IConstant(C), stepClockArg), toRat(0))
 
         val invariantClauses = transducer.locations
         .filter(_ != transducer.initialLocation)
         .map { l =>
-            val invArgs: Seq[ITerm] = Seq(IConstant(C)) ++ globalSignals ++ clockArgs
+            val invArgs: Seq[ITerm] = currentConfigurationArgs
             val locationInvariant =
                 encodeFormula(l.signalLabel.input, signalEnvironment) &
                 encodeFormula(l.signalLabel.output, signalEnvironment) &
@@ -209,13 +221,14 @@ object TimedTransducerEncoder {
                     if (t.resetInstruction contains clock) IConstant(C) else IConstant(clockEnvironment(clock))
                 }
                 val preStepArgs: Seq[ITerm] =
-                    Seq(IConstant(C)) ++ globalSignals ++ clockArgs
+                    currentConfigurationArgs
                 val postStepArgs: Seq[ITerm] =
-                    Seq(IConstant(C)) ++ globalSignals ++ postClockArgs
+                    configurationArgs(postClockArgs, IConstant(C))
                 val guard =
                     encodeFormula(t.signalLabel.input, signalEnvironment) &
                     encodeFormula(t.signalLabel.output, signalEnvironment) &
-                    encodeClockConstraint(t.guard, clockEnvironment, C)
+                    encodeClockConstraint(t.guard, clockEnvironment, C) &
+                    alternatingStepGuard
                 (locationPredicateMap(t.target.label)(postStepArgs: _*)
                     :- (sourceConfiguration(preStepArgs: _*), guard), NoSync)
         }
@@ -224,8 +237,10 @@ object TimedTransducerEncoder {
             transducer.transitions
                 .filter(_.source == transducer.initialLocation)
                 .map { t =>
+                    val postClockArgs =
+                        transducer.clocks.map(_ => IConstant(C))
                     val postStepArgs: Seq[ITerm] =
-                        Seq(IConstant(C)) ++ globalSignals ++ transducer.clocks.map(_ => IConstant(C))
+                        configurationArgs(postClockArgs, IConstant(C))
                     val guard =
                         encodeFormula(t.signalLabel.input, signalEnvironment) &
                         encodeFormula(t.signalLabel.output, signalEnvironment) &
@@ -280,7 +295,7 @@ object TimedTransducerEncoder {
             acceptPreds,
             globalSignalLabels,
             globalSignalTerms,
-            clockTerms
+            clockTerms :+ stepClockTerm
         )
     }
     
