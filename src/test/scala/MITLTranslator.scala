@@ -19,7 +19,7 @@ class MITLTranslatorTests extends FlatSpec {
 
     "MITL Future" should "prohibit runs where output is false for five time units after p" in {
         val formula = Diamond(OpenOpen(0, 5), AP("p"), None)
-        val encoded = encodeTransducerEquation(mitlTranslation(formula), Map.empty)
+        val (encoded, _) = encodeTransducerEquation(mitlTranslation(formula))
 
         val signalByLabel = encoded.head.globalSignalLabels.zip(encoded.head.globalSignalTerms).toMap
         val pSignal = signalByLabel("p")
@@ -69,7 +69,7 @@ class MITLTranslatorTests extends FlatSpec {
 
     "MITL Future" should "witness satisfaction when output is true and p occurs in the open interval" in {
         val formula = Diamond(OpenOpen(0, 5), AP("p"), None)
-        val encoded = encodeTransducerEquation(mitlTranslation(formula), Map.empty)
+        val (encoded, _) = encodeTransducerEquation(mitlTranslation(formula))
 
         val signalByLabel = encoded.head.globalSignalLabels.zip(encoded.head.globalSignalTerms).toMap
         val pSignal = signalByLabel("p")
