@@ -42,6 +42,7 @@ object MITLTransducerTranslator {
             nextVar = nextVar + 1
             nextVar
         }
+        def signalString(s: Int) = s"S${s.toString}"
 
         def unary(
             kind: TimedTransducer.BaseTransducerKind,
@@ -55,7 +56,7 @@ object MITLTransducerTranslator {
                         TimedTransducer.baseTransducer(
                             kind,
                             TimedTransducer.InputLabel(input),
-                            TimedTransducer.OutputLabel(output.toString()),
+                            TimedTransducer.OutputLabel(signalString(output)),
                             bound,
                             rank_id
                         )
@@ -67,7 +68,7 @@ object MITLTransducerTranslator {
                     transducerFromInput(ap)
                 case _      =>
                     val intermediateSignal = fresh()
-                    val base = transducerFromInput(intermediateSignal.toString())
+                    val base = transducerFromInput(signalString(intermediateSignal))
                     TimedTransducer.Sequential(translate(inner, intermediateSignal), base)
             }
         }
@@ -115,9 +116,10 @@ object MITLTransducerTranslator {
                     // val ap_label = fresh().toString
                     (ap, None)
                 }
+                case MITL.True => ("T", None)
                 case _ =>
                     val intermediateSignal = fresh()
-                    (intermediateSignal.toString(), Some(translate(formula, intermediateSignal)))
+                    (signalString(intermediateSignal), Some(translate(formula, intermediateSignal)))
             }
         }
 
@@ -137,7 +139,7 @@ object MITLTransducerTranslator {
                     binary(TimedTransducer.Until, left, right, outputSignal, -1, rank)
                 case S(OpenOpen(Finite(0), PosInfty), left, right, rank)  => 
                     binary(TimedTransducer.Since, left, right, outputSignal, -1, rank)
-                case _ => ???
+                case _ => sys.error("formula cannot be translated to transducers: " + formula.toString)
             }
         }
         translate(formula, 0)

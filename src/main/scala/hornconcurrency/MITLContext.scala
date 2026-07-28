@@ -31,7 +31,7 @@ object MITLContext {
     // keeps a map apMap from variables to atomic propositions
     private var apMap: Map[String, Seq[ITerm] => IFormula] = Map()
     private var rankMap: Map[Int, Seq[ITerm] => ITerm] = Map()
-    private var signal_var_id = 1
+    private var signal_var_id = 0
     private var mitlFormulas: Seq[MITL] = Seq()
 
 
@@ -44,7 +44,7 @@ object MITLContext {
     def get_fresh_signal_var(varName: String = "q") = {
       val tmp = signal_var_id
       signal_var_id += 1
-      varName + signal_var_id.toString      
+      varName + tmp.toString      
     } 
 
     def parseMany(strs: Seq[String]) : MITLContext = {
@@ -141,7 +141,7 @@ object MITLContext {
             val signal_var = get_fresh_signal_var()
             apMap += ((signal_var, ap))
             MITL.AP(signal_var)
-          }
+          }                       
           case f: FPar => translateFormula(f.mformula_)
         }
       }
