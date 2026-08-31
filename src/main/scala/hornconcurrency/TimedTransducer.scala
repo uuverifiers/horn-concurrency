@@ -293,8 +293,8 @@ object TimedTransducer {
             trans(s0, s0, notU(input), q),
             trans(s0, s1, Formula.True, notQ, reset = true),
             trans(s0, s2, Formula.True, q, reset = true),
-            trans(s0, s3, Formula.True, notQ, Bound(c, Lt, a), reset = true),
-            trans(s1, s0, Formula.True, q, Bound(c, Eq, a)),
+            trans(s0, s3, Formula.True, notQ),
+            trans(s1, s0, Formula.True, q, Bound(c, Eq, a)), 
             trans(s1, s1, u(input), notQ, Bound(c, Eq, a), reset = true),
             trans(s1, s2, u(input), q, Bound(c, Eq, a), reset = true),
             trans(s1, s3, u(input), notQ, Bound(c, Eq, a)),
@@ -302,8 +302,7 @@ object TimedTransducer {
             trans(s2, s1, u(input), notQ, Bound(c, Lt, a), reset = true),
             trans(s2, s2, u(input), q, Bound(c, Lt, a), reset = true),
             trans(s2, s3, u(input), notQ, Bound(c, Lt, a)),
-            trans(s3, s1, notU(input), notQ, reset = true)
-          ),
+            trans(s3, s1, notU(input), notQ, reset = true)          ),
           Seq.empty,
           rank_id)
 

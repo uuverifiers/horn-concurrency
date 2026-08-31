@@ -83,17 +83,12 @@ object TimedTransducerEncoder {
                     seqToProd(t1) ++ seqToProd(t2)
             }
         }
-        def getOuterOutputLabel(_teq: TimedTransducer.TimedTransducerEquation): TimedTransducer.OutputLabel = _teq match {
-            case TimedTransducer.Base(t) => {
-                    assert(t.outputLabels.size == 1)
-                    t.outputLabels.head
-                }
-            case TimedTransducer.Product(_, t2)  => getOuterOutputLabel(t2)
-            case TimedTransducer.Sequential(_, t2) => getOuterOutputLabel(t2)
-        }
-        val outerOutputLabel = getOuterOutputLabel(teq)
 
         val transducers = seqToProd(teq)
+        assert(!transducers.isEmpty)
+        assert(transducers.last.outputLabels.size == 1)
+        val outerOutputLabel = transducers.last.outputLabels.head //assumes only one in the last one
+
         val globalSignalLabels =
             (transducers.flatMap(_.inputLabels.map(_.label)) ++
              transducers.flatMap(_.outputLabels.map(_.label))).distinct.sorted
@@ -127,7 +122,8 @@ object TimedTransducerEncoder {
             Seq(),
             RationalTime(0),
             (1 until globalVarNum).toSet,
-            ets.map(t => List(t.progressBlock)),
+            ets.map(t => t.invariantClauses.map(ic => ProgressBlock(Seq(ic)))),
+            // ets.map(t => List(t.progressBlock)),
             ets.flatMap(_.acceptPreds).toMap,
             Some(signalToIdx(output.label))
         )
@@ -179,6 +175,7 @@ object TimedTransducerEncoder {
             .map(
             l => (l.label, MonoSortedPredicate(prefix + "Conf" + l, configurationSorts))
         ).toMap
+        
         val globalSignals: Seq[ITerm] = globalSignalTerms.map(IConstant(_))
         
         // local clocks
@@ -210,7 +207,7 @@ object TimedTransducerEncoder {
             (locationInvariant :- locationPredicateMap(l.label)(invArgs: _*))
         }
         val pb = ProgressBlock(invariantClauses)
-
+ 
         // Could not get signal system to work with a separate step predicate, i.e.
         // conf(..., s, ...) :- conf(..., s, ...), step(s, sp).
         def transitionClause(
